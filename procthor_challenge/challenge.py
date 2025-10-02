@@ -239,7 +239,7 @@ class ProcthorChallenge:
                 stopped = True
                 target_id = 0
                 if not test:
-                    ######modify 2 "metric modify"
+                    self.target_objects,answer = get_target_answer(event.metadata["objects"], episode, index)
                     if answer is None:
                         for idd,target_obj in enumerate(self.target_objects):
                             target_visible = target_obj["visible"]
