@@ -62,15 +62,16 @@ class ProcthorChallenge:
             time.sleep(4)
     
     @staticmethod
-    def load_split(pth, split, level, scene):
-        dir = os.path.join(pth,level,"episode",split,scene)
-        with gzip.GzipFile(os.path.join(dir,"eqa.json.gz"), "r") as f:
-            episode = json.loads(f.read().decode("utf-8"))
-        episodes = episode
-        with gzip.GzipFile(os.path.join(dir,"nav.json.gz"), "r") as f:
-            episode = json.loads(f.read().decode("utf-8"))
-        episodes.extend(episode)
-        
+    def load_split(pth, split, level, scene,start_episode_id,end_episode_id,task_type):
+        dir = os.path.join(pth,split,scene,"episodes",level)
+        if task_type == "eqa":
+            with gzip.GzipFile(os.path.join(dir,"eqa.json.gz"), "r") as f:
+                episode = json.loads(f.read().decode("utf-8"))
+            episodes = episode[start_episode_id:end_episode_id]
+        elif task_type == "nav":
+            with gzip.GzipFile(os.path.join(dir,"nav.json.gz"), "r") as f:
+                episode = json.loads(f.read().decode("utf-8"))
+            episodes = episode[start_episode_id:end_episode_id]
         return episodes
     
     def inference_worker(
@@ -83,9 +84,9 @@ class ProcthorChallenge:
         controller_kwargs: Dict[str, Any],
         max_steps: int,
         origin_path:str,
-        test: bool
+        test: bool,
+        episode_count: int
     ):
-        episode_count = 0
         while True:
             try:
                 episode = in_queue.get(timeout=1)
@@ -102,8 +103,8 @@ class ProcthorChallenge:
             if not os.path.exists(self.result_pth):
                 os.makedirs(self.result_pth)
             if episode['level'] != 'static' :
-                current_pth = os.path.join(self.data_pth,episode['level'],"episode",episode["scene_type"],str(episode["scene_id"]))
-                with open(os.path.join(current_pth,"strategy.json"), "r", encoding="utf-8") as f:
+                current_pth = os.path.join(self.data_pth,episode["scene_type"],str(episode["scene_id"]),"dynamic_strategy")
+                with open(os.path.join(current_pth,f"strategy_final_{episode['level']}.json"), "r", encoding="utf-8") as f:
                     dynamic_strategy = json.load(f)
                 dynamic_strategy = {int(key): value for key, value in dynamic_strategy.items()}
             top_down_path = os.path.join(self.result_pth,"top_down_view/")
@@ -210,13 +211,21 @@ class ProcthorChallenge:
                     })
                     
                     ### dynamic scene update
-                    if total_steps > 0 and total_steps in dynamic_strategy.keys() :
-                        d = dynamic_strategy[total_steps]
+                    if total_steps > 0 and len(dynamic_strategy)> 0 and total_steps in [int(act[0]['time']) for act in dynamic_strategy.values()]: 
+                        d = dynamic_strategy[list(dynamic_strategy.keys())[[int(act[0]['time']) for act in dynamic_strategy.values()].index(total_steps)]]
                         for value in d :
                             if value['action'] == 'PlaceObjectAtPoint':
                                 event = controller.step(action=value["action"], objectId=value["objectId"], position=value["position"])
                             else :
-                                event = controller.step(action=value["action"], objectId=value["objectId"])
+                                event = controller.step(action="InitialRandomSpawn",
+                                    randomSeed=random.randint(0, 1_000_000_000),
+                                    objectIds=[value['objectId']],
+                                    receptacleObjectIds=[value['rectangleobj']],
+                                    numPlacementAttempts=10,
+                                    forceVisible=True,
+                                    allowFloor=True,
+                                    renderImage=False,
+                                    allowMoveable=True)
                             changed = False
                             for obj in self.target_objects:
                                 if value['objectId'] == obj['name']:
@@ -230,7 +239,7 @@ class ProcthorChallenge:
                                 episode['path'][total_steps] = path
                         event = controller.step(dict(action="GetReachablePositions"))
                         reachable_voxel_centers = event.metadata['actionReturn']
-                        agent.update(reachable_voxel_centers)
+                        ###update agent
 
                     total_steps += 1
                     batch_steps += 1
@@ -271,20 +280,20 @@ class ProcthorChallenge:
                     episode_results[index] = None
                 if not os.path.exists(os.path.join(self.result_pth,'episode_results')):
                     os.makedirs(os.path.join(self.result_pth,'episode_results'))
-                with open(os.path.join(self.result_pth,f'episode_results/{str(episode_count)}.json'), 'w') as f:
+                with open(os.path.join(self.result_pth,f'episode_results.json'), 'w') as f:
                     json.dump(episode_results, f) 
                 if not os.path.exists(os.path.join(self.result_pth,'episode_metrics')):
                     os.makedirs(os.path.join(self.result_pth,'episode_metrics'))
-                with open(os.path.join(self.result_pth,f'episode_metrics/{str(episode_count)}.json'), 'w') as f:
+                with open(os.path.join(self.result_pth,f'episode_metrics.json'), 'w') as f:
                     json.dump(episode_metrics, f) 
             out_queue.put((episode["instruction"], episode_metrics, episode_results))
             del agent
             controller.stop()
         print(f"Worker {worker_ind} Finished.")
-    def inference(self, episodes, nprocesses=1, test=False):
+    def inference(self, episodes, nprocesses=1, test=False,episode_id = 0):
         send_queue = queue.Queue()
         receive_queue = queue.Queue()
-        expected_count = len(episodes[0]['instruction'])
+        expected_count = len(episodes)
         for e in episodes:
             send_queue.put(e)
         self.inference_worker(
@@ -296,7 +305,8 @@ class ProcthorChallenge:
             controller_kwargs=self.controller_kwargs,
             max_steps=self.config["max_steps"],
             origin_path=self.config["result_path"],
-            test=test
+            test=test,
+            episode_count = episode_id
         )
 
         metrics = {"episodes" : {}}
@@ -305,14 +315,15 @@ class ProcthorChallenge:
         while len(episode_results) < expected_count:
             # try:
             ep_id, episode_metrics, episode_result = receive_queue.get(timeout=1000)
-            metrics["episodes"][ep_id] = episode_metrics
+            metrics["episodes"][episode_id] = episode_metrics
+            
             episode_results.append(episode_result)
 
-        metrics["ep_len"] = sum([len(em["trajectory"]) for em in metrics["episodes"].values()]) / len(metrics["episodes"])
+        metrics["ep_len"] = sum([r[list(r.keys())[-1]]['end_episodes'] for r in episode_results]) / len(metrics["episodes"])
         if not test:
-            metrics["success"] = sum([r["success"] for r in episode_results]) / len(episode_results)
+            metrics["success"] = sum([v["success"] for r in episode_results for v in r.values() ]) / len(episode_results)
             # metrics["spl"] = ai2thor.util.metrics.compute_spl(episode_results)
-            metrics['spl'] = sum([r["spl"] for r in episode_results]) / len(episode_results)
+            metrics['spl'] = sum([v["spl"] for r in episode_results for v in r.values() ]) / len(episode_results)
 
         if not test:
             logger.info("Total Episodes: {episode_count} Success:{success} SPL:{spl} Episode Length:{ep_len}".format(episode_count=len(episodes), success=metrics["success"], spl=metrics["spl"], ep_len=metrics["ep_len"]))

@@ -13,6 +13,6 @@ initialize:
 thor_build_id: ab3cacd0fc17754d4c080a3fd50b18395fae8647
 width: 640
 height: 480
-max_steps: 250
+max_steps: 500
 result_path: "Result/"
 scene: "Procedural"

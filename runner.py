@@ -22,7 +22,7 @@ def main():
     )
     parser.add_argument(
         "--data_pth", "-d",
-        default="dataset/",
+        default="dataset/Dynamic_Strategy",
         help="Filepath to challenge dataset.",
     )
     parser.add_argument(
@@ -32,7 +32,7 @@ def main():
     )
     parser.add_argument(
         "--dynamic_level", "-l",
-        default="static",
+        default="small",
         help="Filepath to challenge dataset.",
     )
     parser.add_argument(
@@ -40,7 +40,21 @@ def main():
         default="1",
         help="Filepath to challenge dataset.",
     )
-
+    parser.add_argument(
+        "--task_type", "-t",
+        default="nav",
+        help="Filepath to challenge results.",
+    )
+    parser.add_argument(
+        "--start_episode_id", "-es",
+        default=0,
+        help="Filepath to challenge dataset.",
+    )
+    parser.add_argument(
+        "--end_episode_id", "-ee",
+        default=1,
+        help="Filepath to challenge dataset.",
+    )
     parser.add_argument(
         "--submission",
         action="store_true")
@@ -63,6 +77,11 @@ def main():
         type=int,
         help="Number of parallel processes used to compute inference.",
     )
+    parser.add_argument(
+        "--output", "-o",
+        default="random_metrics.json.gz",
+        help="Filepath to output results to.",
+    )
 
     args = parser.parse_args()
     if args.submission:
@@ -78,11 +97,12 @@ def main():
 
     challenge_metrics = {}
 
-    val_episodes = r.load_split(args.data_pth, args.data_split, args.dynamic_level, args.scene_id)
+    val_episodes = r.load_split(args.data_pth, args.data_split, args.dynamic_level, args.scene_id,args.start_episode_id,args.end_episode_id,args.task_type)
     challenge_metrics["val"] = r.inference(
         val_episodes,
         nprocesses=args.nprocesses,
-        test=False
+        test=False,
+        episode_id = args.start_episode_id
         )
     with gzip.open(args.output, "wt", encoding="utf-8") as zipfile:
         json.dump(challenge_metrics, zipfile)

@@ -1,57 +1,64 @@
-# OmniDy_Bench
+# OmniDy-Bench: A Unified Benchmark for Life-long Dynamic Embodied Navigation
 
-### Contents
+## :robot: OmniDy-Bench
+put the teaser image
 
-- [Installation](#installation)
-- [Dataset](#dataset)
+## :hammer: Installation
 
-## Installation
 ```
 pip install ai2thor prior openai
-```
+```  
 
-Run evaluation on random agent
-```bash
-python3 runner.py -a agents.random_agent -c ./configs/procthor.yaml -d ./dataset -p train -l static -i 1 -n 1
-```
-
-This command runs inference with the random agent over the debug split. You can pass the args (`--train`, `--val`, and/or `--test`) or `--submission` instead to run this agent on other splits.
-
-
-After installing and running the demo, you should see log messages that resemble the following:
-```
-2025-09-29 17:04:58,089 [INFO] procthor_challenge.challenge - Task Start instruction:What texture is the Laptop in Bedroom ? scene:train_1 initial_position:{'x': 5.0, 'y': 0.9009993672370911, 'z': 15.25} rotation:0
-INFO:procthor_challenge.challenge:Task Start instruction:What texture is the Laptop in Bedroom ? scene:train_1 initial_position:{'x': 5.0, 'y': 0.9009993672370911, 'z': 15.25} rotation:0
-[{'x': 5.0, 'y': 0.00650787353515625, 'z': 15.25}, {'x': 3.5799999237060547, 'y': 0.00650787353515625, 'z': 15.75999927520752}, {'x': 2.75, 'y': 0.00650787353515625, 'z': 15.819999694824219}, {'x': 2.5999999046325684, 'y': 0.00650787353515625, 'z': 15.819999694824219}, {'x': 2.559999942779541, 'y': 0.00650787353515625, 'z': 15.799999237060547}, {'x': 2.4700000286102295, 'y': 0.00650787353515625, 'z': 15.75}, {'x': 2.3899998664855957, 'y': 0.00650787353515625, 'z': 15.569999694824219}, {'x': 2.3899998664855957, 'y': 0.00650787353515625, 'z': 15.5}, {'x': 2.450000047683716, 'y': 0.00650787353515625, 'z': 15.359999656677246}, {'x': 2.4800000190734863, 'y': 0.00650787353515625, 'z': 15.309999465942383}, {'x': 3.359999895095825, 'y': 0.00650787353515625, 'z': 13.889999389648438}, {'x': 3.490000009536743, 'y': 0.00650787353515625, 'z': 13.819999694824219}, {'x': 7.0, 'y': 0.00650787353515625, 'z': 12.069999694824219}, {'x': 11.219999313354492, 'y': 0.00650787353515625, 'z': 11.529999732971191}, {'x': 11.40999984741211, 'y': 0.00650787353515625, 'z': 11.529999732971191}, {'x': 11.539999961853027, 'y': 0.00650787353515625, 'z': 11.59999942779541}, {'x': 11.639999389648438, 'y': 0.00650787353515625, 'z': 11.809999465942383}, {'x': 11.75, 'y': 0.00650787353515625, 'z': 14.25}]
-2025-09-29 17:04:58,423 [INFO] procthor_challenge.challenge - Agent action: LookUp
-INFO:procthor_challenge.challenge:Agent action: LookUp
-total_step: 0 action success: True total time: 0.09546089172363281
-2025-09-29 17:04:58,641 [INFO] procthor_challenge.challenge - Agent action: LookDown
-INFO:procthor_challenge.challenge:Agent action: LookDown
-total_step: 1 action success: True total time: 0.07021379470825195
-2025-09-29 17:04:58,835 [INFO] procthor_challenge.challenge - Agent action: LookUp
-INFO:procthor_challenge.challenge:Agent action: LookUp
-total_step: 2 action success: True total time: 0.06385231018066406
-
-```
-
-## Dataset
-Download the dataset and put into the dataset/ dir.
+## :floppy_disk: Dataset
+Download the dataset and put into the dataset/ dir.   
 ```
 git lfs install
 git clone https://huggingface.co/datasets/yhncao/UniDy_Bench
-```  
+```   
+The code requires the datasets in `data` folder in the following format:  
+```bash
+  ├── OMNIDY_BENCHMARK/
+  │  ├── dataset
+  │  │  ├── Dynamic_Strategy/
+  │  │  │  ├── attribute/
+  │  │  │  │  ├── train/
+  │  │  │  │  ├── val/
+  │  │  │  │  ├── test/
+  │  │  │  │  │   ├── 1/
+  │  │  │  │  │   │   ├── description.json
+  │  │  │  │  │   │   ├── images/
+  │  │  │  │  │   │   │   ├── Pen|surface|3|29_1.png
+  │  │  │  ├── train/
+  │  │  │  ├── val/
+  │  │  │  ├── test/
+  │  │  │  │  ├── 1/
+  │  │  │  │  |   ├── dynamic_strategy/
+  │  │  │  │  |   ├── episodes/
+  │  │  │  │  │   │   ├── static/
+  │  │  │  │  │   │   ├── small/
+  │  │  │  │  │   │   ├── all/
+  │  │  │  │  │   │   |   ├── nav.json.gz
+  │  │  │  │  │   │   |   ├── eqa.json.gz
+  ```
+All the episodes for each split (train/val/test) can be found within `dataset/`.  Configuration parameters for the environment can be found within `configs/procthor.yaml`. 
+### :heavy_exclamation_mark: Note
+We select 500 train scenes, 200 validation scenes and 100 test scenes from Procthor-10k dataset.  
+Each scene has three levels of dynamic degree:
+1. static — static scene without objects moved.
+2. small — only objects on other surfaces can be moved.  
+3. all — all objects in the scene can be moved.  
 
-The dataset is divided into the following splits:
-### Nav  
+There are three type of tasks in our benchmark: navigation, active-embodied question answering and long-term memory captioning.  
+The statistics of data source are shown in the following tables.
+### :round_pushpin: Nav  
 
 | Split |Level |Scene| Episodes | Files |
 | ----- |:-----|:-----|:-----:|-----|
-| Train |Static|500| 1000k | `dataset/static/episode/train/{scene_id}/nav.json.gz`|
-| Val   |Static|200| 400k | `dataset/static/episode/val/{scene_id}/nav.json.gz` |  
-| Test  |Static|100| 200k | `dataset/static/episode/test/{scene_id}/nav.json.gz`|
+| Train |Static /Small /All|500| 1000k | `dataset/static/episode/train/{scene_id}/nav.json.gz`|
+| Val   |Static /Small /All|200| 400k | `dataset/static/episode/val/{scene_id}/nav.json.gz` |  
+| Test  |Static /Small /All|100| 200k | `dataset/static/episode/test/{scene_id}/nav.json.gz`|
 
-### A-EQA 
+### :mag_right: A-EQA 
 
 | Split |Level |Scene| Episodes | Files |
 | ----- |:-----|:-----|:-----:|-----|
@@ -126,9 +133,7 @@ Nav Episode:
         ['PaperTowelRoll']
     ]
 }
-```  
 
-```javascript  
 A-EQA Episode:
 {
     'time': 75, 
@@ -143,7 +148,34 @@ A-EQA Episode:
     'answer': [{'0': 1}]
 }
 ```
+</details>
+ 
+
+## 🎯 Evaluation
+```bash
+python3 runner.py -a agents.random_agent -c ./configs/procthor.yaml -d ./dataset -p train -l static -i 1 -n 1
+```
+This command runs inference with the random agent over the debug split. You can pass the args (`--train`, `--val`, and/or `--test`) or `--submission` instead to run this agent on other splits.  
+
+To run evaluation on slurm as batch job use the following sbatch script:  
+```bash
+bash batch_run.sh
+```
 
 
-All the episodes for each split (train/val/test) can be found within `dataset/`.  Configuration parameters for the environment can be found within `configs/procthor.yaml`.
 
+
+### After installing and running the demo, you should see log messages that resemble the following:
+```
+2025-09-29 17:04:58,089 [INFO] procthor_challenge.challenge - Task Start instruction:What texture is the Laptop in Bedroom ? scene:train_1 initial_position:{'x': 5.0, 'y': 0.9009993672370911, 'z': 15.25} rotation:0
+INFO:procthor_challenge.challenge:Task Start instruction:What texture is the Laptop in Bedroom ? scene:train_1 initial_position:{'x': 5.0, 'y': 0.9009993672370911, 'z': 15.25} rotation:0
+[{'x': 5.0, 'y': 0.00650787353515625, 'z': 15.25}, {'x': 3.5799999237060547, 'y': 0.00650787353515625, 'z': 15.75999927520752}, {'x': 2.75, 'y': 0.00650787353515625, 'z': 15.819999694824219}, {'x': 2.5999999046325684, 'y': 0.00650787353515625, 'z': 15.819999694824219}, {'x': 2.559999942779541, 'y': 0.00650787353515625, 'z': 15.799999237060547}, {'x': 2.4700000286102295, 'y': 0.00650787353515625, 'z': 15.75}, {'x': 2.3899998664855957, 'y': 0.00650787353515625, 'z': 15.569999694824219}, {'x': 2.3899998664855957, 'y': 0.00650787353515625, 'z': 15.5}, {'x': 2.450000047683716, 'y': 0.00650787353515625, 'z': 15.359999656677246}, {'x': 2.4800000190734863, 'y': 0.00650787353515625, 'z': 15.309999465942383}, {'x': 3.359999895095825, 'y': 0.00650787353515625, 'z': 13.889999389648438}, {'x': 3.490000009536743, 'y': 0.00650787353515625, 'z': 13.819999694824219}, {'x': 7.0, 'y': 0.00650787353515625, 'z': 12.069999694824219}, {'x': 11.219999313354492, 'y': 0.00650787353515625, 'z': 11.529999732971191}, {'x': 11.40999984741211, 'y': 0.00650787353515625, 'z': 11.529999732971191}, {'x': 11.539999961853027, 'y': 0.00650787353515625, 'z': 11.59999942779541}, {'x': 11.639999389648438, 'y': 0.00650787353515625, 'z': 11.809999465942383}, {'x': 11.75, 'y': 0.00650787353515625, 'z': 14.25}]
+2025-09-29 17:04:58,423 [INFO] procthor_challenge.challenge - Agent action: LookUp
+INFO:procthor_challenge.challenge:Agent action: LookUp
+total_step: 0 action success: True total time: 0.09546089172363281
+2025-09-29 17:04:58,641 [INFO] procthor_challenge.challenge - Agent action: LookDown
+INFO:procthor_challenge.challenge:Agent action: LookDown
+total_step: 1 action success: True total time: 0.07021379470825195
+2025-09-29 17:04:58,835 [INFO] procthor_challenge.challenge - Agent action: LookUp
+INFO:procthor_challenge.challenge:Agent action: LookUp
+total_step: 2 action success: True total time: 0.06385231018066406

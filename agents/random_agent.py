@@ -13,7 +13,7 @@ class SimpleRandomAgent(Agent):
         image_task = action_return["image_task"]       # np.float32 : 480 x 640 (default: None)
         event = action_return["event"]  # str : e.g. "AlarmClock"
         step = action_return["step"]
-        action = random.choice(ALLOWED_ACTIONS)
+        action = random.choice(ALLOWED_ACTIONS[1:])
         predict = None
         return action,predict
 
