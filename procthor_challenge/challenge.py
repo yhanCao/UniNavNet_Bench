@@ -215,7 +215,7 @@ class ProcthorChallenge:
                         d = dynamic_strategy[list(dynamic_strategy.keys())[[int(act[0]['time']) for act in dynamic_strategy.values()].index(total_steps)]]
                         for value in d :
                             if value['action'] == 'PlaceObjectAtPoint':
-                                event = controller.step(action=value["action"], objectId=value["objectId"], position=value["position"])
+                                event = controller.step(action=value["action"], objectId=value["objectId"], position=value["target_position"],rotation=value["target_rotation"])
                             else :
                                 event = controller.step(action="InitialRandomSpawn",
                                     randomSeed=random.randint(0, 1_000_000_000),
@@ -278,13 +278,9 @@ class ProcthorChallenge:
                     print("found goal:",total_steps,"object type:",episode["instruction"][index],episode_results[index])
                 else:
                     episode_results[index] = None
-                if not os.path.exists(os.path.join(self.result_pth,'episode_results')):
-                    os.makedirs(os.path.join(self.result_pth,'episode_results'))
-                with open(os.path.join(self.result_pth,f'episode_results.json'), 'w') as f:
+                with open(os.path.join(self.result_pth,f'episode_results_{episode_count}.json'), 'w') as f:
                     json.dump(episode_results, f) 
-                if not os.path.exists(os.path.join(self.result_pth,'episode_metrics')):
-                    os.makedirs(os.path.join(self.result_pth,'episode_metrics'))
-                with open(os.path.join(self.result_pth,f'episode_metrics.json'), 'w') as f:
+                with open(os.path.join(self.result_pth,f'episode_metrics_{episode_count}.json'), 'w') as f:
                     json.dump(episode_metrics, f) 
             out_queue.put((episode["instruction"], episode_metrics, episode_results))
             del agent

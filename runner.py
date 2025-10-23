@@ -32,7 +32,7 @@ def main():
     )
     parser.add_argument(
         "--dynamic_level", "-l",
-        default="small",
+        default="all",
         help="Filepath to challenge dataset.",
     )
     parser.add_argument(
@@ -48,11 +48,13 @@ def main():
     parser.add_argument(
         "--start_episode_id", "-es",
         default=0,
+        type=int,
         help="Filepath to challenge dataset.",
     )
     parser.add_argument(
         "--end_episode_id", "-ee",
         default=1,
+        type=int,
         help="Filepath to challenge dataset.",
     )
     parser.add_argument(
