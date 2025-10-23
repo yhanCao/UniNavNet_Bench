@@ -13,7 +13,7 @@ pip install ai2thor prior openai
 Download the dataset and put into the dataset/ dir.   
 ```
 git lfs install
-git clone https://huggingface.co/datasets/yhncao/UniDy_Bench
+git clone https://huggingface.co/datasets/yhncao/OmniDy-Benchmark
 ```   
 The code requires the datasets in `data` folder in the following format:  
 ```bash
