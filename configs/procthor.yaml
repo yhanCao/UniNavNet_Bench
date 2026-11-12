@@ -16,3 +16,14 @@ height: 480
 max_steps: 500
 result_path: "Result/"
 scene: "Procedural"
+# save two top-down images per step under result_path (slow; for debugging)
+save_top_down_view: False
+# an Active-EQA answer only counts if the queried object was seen during the episode
+eqa_require_grounding: True
+# Active-EQA judge: "llm" (OpenAI-compatible chat API) or "exact" (string match, offline tests)
+# overridable with UNINAVBENCH_JUDGE, UNINAVBENCH_JUDGE_BASE_URL, UNINAVBENCH_JUDGE_MODEL, UNINAVBENCH_JUDGE_API_KEY
+judge:
+    type: llm
+    base_url: "http://192.168.100.24:8055/v1"
+    model: "default"
+    api_key_env: "UNINAVBENCH_JUDGE_API_KEY"

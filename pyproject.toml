@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uninavbench"
+version = "0.1.0"
+description = "UniNavBench: long-horizon navigation and Active-EQA in dynamic indoor scenes (AI2-THOR / ProcTHOR)"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "ai2thor>=5.0",
+    "prior",
+    "openai>=1.0",
+    "numpy",
+    "pillow",
+    "pyyaml",
+]
+
+[project.scripts]
+uninavbench = "uninavbench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["uninavbench*"]
+
+[tool.setuptools.package-data]
+uninavbench = ["configs/*.yaml"]
