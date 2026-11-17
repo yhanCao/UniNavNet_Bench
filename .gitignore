@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+results/
+Result/
+verify_results/
+verify_report.json
+metrics.json.gz
+.pytest_cache/
