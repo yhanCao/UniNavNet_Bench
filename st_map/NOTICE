@@ -1,0 +1,16 @@
+ST-Map packages the runtime dependency closure of ST-CogNav at commit
+5ac93986c2db14d9f25143d86ed0b55ad7f8735c
+("ST-CogNav memory: archive removed objects and extract prompt subgraph").
+
+UPSTREAM.json records SHA-256 hashes of the original selected source blobs.
+Files have integration changes: local imports are namespaced, configuration and
+resources are relocatable, credentials are removed, lifecycle is adapted, and
+runtime edge cases are repaired. Temporal-memory and voxel-coordinate methods
+have been moved into st_map.memory and st_map.geometry.
+
+Original copyright and attribution notices are retained in vendored files,
+including notices for OpenSeeD, Detectron2/Mask2Former, Deformable DETR,
+Swin Transformer, and TensorFlow-derived depth utilities. External dependencies
+and separately downloaded model weights retain their respective licenses.
+The parent checkout does not provide a separate upstream LICENSE file; this
+notice does not relicense third-party code or model weights.

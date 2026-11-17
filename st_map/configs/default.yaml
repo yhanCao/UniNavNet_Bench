@@ -1,0 +1,34 @@
+# Set ST_MAP_CONFIG to a copy of this file. Relative paths are relative to this YAML.
+openseed_checkpoint: ""  # required: openseed_swinl_pano_sota.pt
+output_dir: results
+embedding_model: mixedbread-ai/mxbai-embed-large-v1
+clip_model: ViT-H-14
+clip_pretrained: laion2b_s32b_b79k
+llm:
+  base_url: http://127.0.0.1:8000/v1
+  model: default  # replace with your deployed text model
+  api_key: EMPTY  # prefer ST_MAP_LLM_API_KEY for authenticated servers
+  enable_thinking: false  # thinking multiplies output tokens
+  max_tokens: 64          # the reply is {"reason": <= 15 words, "result": node}
+vlm:
+  base_url: http://127.0.0.1:8000/v1
+  model: default  # replace with your deployed vision-language model
+  api_key: EMPTY
+  enable_thinking: false
+  max_tokens: 8           # True / False
+  image_max_side: 320     # views are cropped to the object and scaled down (~100 tokens each)
+  crop_margin: 0.3
+memory:
+  subgraph_nodes: 8  # 0 selects the whole graph
+  subgraph_frontiers: 4
+  subgraph_objects_per_node: 6
+  history_caption: false
+  views_per_object: 3      # best views kept per object; other frames are deleted from disk
+  class_votes: 20          # recent class labels kept per object
+  segments_per_object: 8   # recent state segments kept per object
+  archive_limit: 32        # removed objects kept in the history archive (oldest dropped)
+  caption_vlm:
+    base_url: http://127.0.0.1:8000/v1
+    model: default
+    api_key: EMPTY
+debug_artifacts: false   # per-step RGB-D dumps, detection overlays and path plots

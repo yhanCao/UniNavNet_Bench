@@ -1,0 +1,31 @@
+initialize:
+    rotateStepDegrees: 90
+    visibilityDistance: 1.0
+    gridSize: 0.25
+    continuousMode: True
+    snapToGrid: True
+    agentMode: default
+    fieldOfView: 63.453048374758716 # Vertical FOV, corresponds to a horizontal FOV of 79
+    renderDepthImage: True
+    renderInstanceSegmentation: False
+    renderClassImage: False
+    renderObjectImage: False
+# House loader revision and simulator executable build are separate identifiers.
+procthor_revision: 439193522244720b86d8c81cde2e51e3a4d150cf
+ai2thor_commit_id: f0825767cd50d69f666c7f282e54abfe58f1e917
+width: 640
+height: 480
+max_steps: 500
+result_path: "results/"
+scene: "Procedural"
+# save two top-down images per step under result_path (slow; for debugging)
+save_top_down_view: False
+# an Active-EQA answer only counts if the queried object was seen during the episode
+eqa_require_grounding: True
+# Active-EQA judge: "llm" (OpenAI-compatible chat API) or "exact" (string match, offline tests)
+# overridable with UNINAVBENCH_JUDGE, UNINAVBENCH_JUDGE_BASE_URL, UNINAVBENCH_JUDGE_MODEL, UNINAVBENCH_JUDGE_API_KEY
+judge:
+    type: llm
+    base_url: null          # set UNINAVBENCH_JUDGE_BASE_URL
+    model: "default"        # or UNINAVBENCH_JUDGE_MODEL
+    api_key_env: "UNINAVBENCH_JUDGE_API_KEY"

@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uninavbench"
+version = "0.1.0"
+description = "UniNavBench: long-horizon navigation and Active-EQA in dynamic indoor scenes (AI2-THOR / ProcTHOR)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "The UniNavBench Authors" },
+]
+keywords = ["embodied-ai", "navigation", "embodied-question-answering", "benchmark", "ai2-thor", "procthor"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "ai2thor==5.0.0",
+    "prior==1.0.3",
+    "openai>=1.0",
+    "huggingface_hub>=0.20",
+    "numpy",
+    "pillow",
+    "pyyaml",
+]
+
+[project.urls]
+Homepage = "https://github.com/yhanCao/UniNavNet_Bench"
+Dataset = "https://huggingface.co/datasets/yhncao/UniNavBench"
+
+[project.optional-dependencies]
+modelscope = ["modelscope>=1.15"]
+st-map = [
+    "torch>=2.0", "torchvision", "open3d>=0.17", "opencv-python",
+    "networkx>=2.8", "scipy", "matplotlib", "shapely>=2", "scikit-image",
+    "scikit-learn", "scikit-fmm", "omegaconf", "open-clip-torch",
+    "sentence-transformers", "transformers<5", "timm>=0.6,<2", "tqdm",
+    "distinctipy", "supervision", "fvcore", "pycocotools", "pandas",
+]
+
+[project.scripts]
+uninavbench = "uninavbench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["uninavbench*", "st_map*"]
+
+[tool.setuptools.package-data]
+uninavbench = ["configs/*.yaml"]
+st_map = ["UPSTREAM.json", "NOTICE", "configs/*.yaml", "_vendor/sg.yaml",
+          "_vendor/configs/**/*.yaml", "_vendor/configs/*.txt",
+          "_vendor/openseed/body/encoder/ops/**/*.cpp",
+          "_vendor/openseed/body/encoder/ops/**/*.h",
+          "_vendor/openseed/body/encoder/ops/**/*.cu",
+          "_vendor/openseed/body/encoder/ops/**/*.cuh",
+          "_vendor/openseed/body/encoder/ops/*.sh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
