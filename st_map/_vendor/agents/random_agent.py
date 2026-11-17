@@ -258,17 +258,24 @@ class SimpleRandomAgent(Agent):
                     print("node candidates:",candidate)
                     if len(candidate) >= 1 :
                         start=time.time()
+                        note = None
                         for attempt in range(3):
                             try:
-                                # response,node = self.llm.query_node_graph_o1("map/graph_"+str(step)+".jpg",user)
-                                response,found_elements = self.llm.query_node_txt(user)
-                                if found_elements not in candidate:
-                                    raise ValueError("LLM selected a node outside the prompt candidates")
-                                break
-                            except Exception as ex: # rate limit
-                                if attempt == 2:
-                                    raise RuntimeError("ST-Map planner failed after 3 attempts") from ex
+                                response,found_elements = self.llm.query_node_txt(user,note)
+                                print("llm reply:",response)
+                                if found_elements in candidate:
+                                    break
+                                note = f"Node {found_elements} is not in Candidates. Choose one of {candidate}."
+                            except Exception as ex: # rate limit, malformed reply
+                                print("llm query failed:",ex)
                                 time.sleep(1)
+                        else:
+                            # no valid answer: the nearest frontier keeps exploring (nearest candidate without one)
+                            pool = [n for n in candidate if n in frontiers] or candidate
+                            here = np.array(self.graph.nodes[agent_location_node]['pos'])
+                            found_elements = min(pool,key=lambda n:np.linalg.norm(np.array(self.graph.nodes[n]['pos'])-here))
+                            response = {'reason':'fallback: no valid LLM choice, nearest frontier'}
+                            print("WARNING planner fallback to node",found_elements)
                         end = time.time()
                         print("qwq llm query time:",end-start)
                         print("selection:",found_elements,"reason:",response['reason'])

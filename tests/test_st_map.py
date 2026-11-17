@@ -330,7 +330,7 @@ def test_planner_prompt_is_one_line_per_node():
     g = graph()
     prompt, candidates = QueryByLLM('Find Cup', 0, g, [0], [3], {1: ['Sofa', 'Cup (last seen at timestep 3)']})
     lines = prompt.splitlines()
-    assert lines[2] == 'Node 0 : explored'
+    assert lines[2] == 'Node 0 : you are here, explored'
     assert lines[3].startswith('Node 1 : unexplored, 1.0m') and lines[3].endswith('| Sofa, Cup (last seen at timestep 3)')
     assert lines[5].startswith('Node 3 : frontier, unexplored, 20.0m')
     assert lines[-1] == 'Candidates: [1, 2, 3]' and 'Path' not in prompt

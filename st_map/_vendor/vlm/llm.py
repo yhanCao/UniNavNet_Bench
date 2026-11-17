@@ -12,8 +12,10 @@ class LLMQwQ():
         self.model = model
         self.chat = ChatClient(base_url, api_key, model, **{"max_tokens": 64, **options})
 
-    def query_node_txt(self, user):
+    def query_node_txt(self, user, note=None):
         from st_map._vendor.vl_prompt.prompt_gpt.queryNodetxt import SYSTEM_PROMPT
+        if note:
+            user = user + "\n" + note
         reply = self.chat.chat([{'role': 'system', 'content': SYSTEM_PROMPT}, {'role': 'user', 'content': user}], "llm")
         reply = json.loads(reply[reply.find("{"):reply.rfind("}") + 1])
         result = reply['result'] if isinstance(reply['result'], int) else int(re.findall(r"\d+", str(reply['result']))[0])

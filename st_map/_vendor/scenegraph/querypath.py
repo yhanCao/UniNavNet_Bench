@@ -136,7 +136,8 @@ def QueryByLLM(goal_name,agent_node,voronoi_graph,explored_nodes,frontier_nodes,
     for node in pos.keys():
         if keep_nodes is not None and node not in keep_nodes and node != agent_node:
             continue
-        flags = ["frontier" if node in frontier_nodes else "", "explored" if node in explored_nodes else "unexplored"]
+        flags = ["you are here" if node == agent_node else "", "frontier" if node in frontier_nodes else "",
+                 "explored" if node in explored_nodes else "unexplored"]
         txt = f"Node {node} : " + ", ".join(f for f in flags if f)
         if node != agent_node:
             d = dist.get(node, euclidean_distance(pos,agent_node,node) if agent_node in pos else 0)
