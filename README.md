@@ -35,7 +35,7 @@ uninavbench download --split test --scenes 0 4 7
 
 Sizes are download sizes. The shards stay in the Hugging Face cache (`~/.cache/huggingface`) after extraction, so plan for about twice that disk space, or delete the cached shards once the data is extracted.
 
-> **Dataset release complete.** All 33 shards for `train`, `val`, `test`, and `mini_test` are available in [yhncao/UniNavBench](https://huggingface.co/datasets/yhncao/UniNavBench), including the navigation completeness repair for train scenes 220 and 229 (manifest version `2026.11.14.1`). The Python package is not on PyPI yet; install it from this source checkout. See *Publishing the dataset* below.
+> **Dataset release complete.** All 33 shards for `train`, `val`, `test`, and `mini_test` are available in [yhncao/UniNavBench](https://huggingface.co/datasets/yhncao/UniNavBench), including the navigation completeness repair for train scenes 220 and 229 and the 2026-11-16 floor-connectivity and navigation-visibility repairs (manifest version `2026.11.16.1`). The Python package is not on PyPI yet; install it from this source checkout. See *Publishing the dataset* below.
 
 `mini_test` is a convenience subset of `test` containing scenes 0, 4 and 6, with all three dynamic levels and both task families. It extracts into `test/` and `attributes/test/`, so evaluate it with `-p test` (for example, `uninavbench run -a examples/agents/random_agent.py -p test -i 0 -es 0 -ee 1`). The full test split still contains all 100 scenes; this subset is not an independent evaluation split.
 
