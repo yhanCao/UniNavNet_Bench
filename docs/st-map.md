@@ -67,20 +67,24 @@ uninavbench run -a uninavbench.agents.st_map -p test -l all -i 0 -t nav -es 0 -e
 # Equivalent entry points: -a st_map or -a examples/agents/st_map.py
 ```
 
-Any OpenAI-compatible endpoint works. For example, Alibaba Cloud Model Studio (DashScope) with one
-multimodal model for both roles:
+Any OpenAI-compatible endpoint works; one multimodal model can serve both roles:
 
 ```yaml
-llm: {base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: qwen3.8-flash}
-vlm: {base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: qwen3.8-flash}
+llm: {base_url: "https://api.openai.com/v1", model: gpt-6.2-sol}
+vlm: {base_url: "https://api.openai.com/v1", model: gpt-6.2-sol}
 ```
 
-with the key in `ST_MAP_LLM_API_KEY` and `ST_MAP_VLM_API_KEY`.
+with the key in `ST_MAP_LLM_API_KEY` and `ST_MAP_VLM_API_KEY`. `extra_body` passes provider-specific
+request fields (for example `{reasoning_effort: low}` for OpenAI reasoning models). `enable_thinking` is a
+DashScope / Qwen field: it is only sent when set, e.g. `enable_thinking: false` to turn Qwen3 thinking off.
+Requests adapt to the provider: a server that rejects `max_tokens` gets `max_completion_tokens`, and one that
+rejects a temperature gets its default.
 
 ### Token use
 
-Thinking is off by default (`enable_thinking: false`); turning it on streams the reply and multiplies
-output tokens. The planner prompt describes each candidate node on one line (frontier / explored, path
+Thinking or reasoning multiplies output tokens: keep it off or low (`enable_thinking: false` on DashScope,
+`extra_body: {reasoning_effort: low}` on OpenAI). With a reasoning model, the output caps below also have to
+leave room for its reasoning tokens (or set them to `null`). The planner prompt describes each candidate node on one line (frontier / explored, path
 distance and direction, nearby objects) and asks for `{"reason": <= 15 words, "result": node}`, capped at
 `llm.max_tokens` (64). Target verification sends up to three views of the candidate, each cropped to the
 object's detection box plus `vlm.crop_margin` and scaled to `vlm.image_max_side` (320 px, about 100 image

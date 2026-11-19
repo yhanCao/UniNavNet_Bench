@@ -1,7 +1,8 @@
 """OpenAI-compatible chat client shared by the planner LLM and the verifier VLM.
 
-Thinking is off by default (it multiplies output tokens); DashScope only streams thinking replies, so a
-thinking request is streamed and collected. Token usage is summed per call kind in USAGE.
+``enable_thinking`` is only sent when set (a DashScope / Qwen field that other providers reject); DashScope
+only streams thinking replies, so a thinking request is streamed and collected. ``extra_body`` passes other
+provider-specific fields, e.g. OpenAI's ``reasoning_effort``. Token usage is summed per call kind in USAGE.
 """
 import base64
 import io
@@ -10,24 +11,31 @@ from collections import Counter
 from openai import OpenAI
 from PIL import Image
 
+from uninavbench.chat import create_chat
+
 USAGE = Counter()  # "<kind>_calls", "<kind>_prompt_tokens", "<kind>_completion_tokens"
 
 
 class ChatClient:
-    def __init__(self, base_url=None, api_key=None, model="default", enable_thinking=False, max_tokens=None,
-                 timeout=120, **_):
+    def __init__(self, base_url=None, api_key=None, model="default", enable_thinking=None, max_tokens=None,
+                 timeout=120, extra_body=None, **_):
         self.model = model
         self.enable_thinking = enable_thinking
         self.max_tokens = max_tokens
+        self.extra_body = dict(extra_body or {})
+        if enable_thinking is not None:
+            self.extra_body["enable_thinking"] = bool(enable_thinking)
         self.client = OpenAI(base_url=base_url, api_key=api_key or "EMPTY", timeout=timeout, max_retries=2)
 
     def chat(self, messages, kind, max_tokens=None):
-        kwargs = dict(model=self.model, messages=messages, extra_body={"enable_thinking": bool(self.enable_thinking)})
+        kwargs = dict(model=self.model, messages=messages)
+        if self.extra_body:
+            kwargs["extra_body"] = self.extra_body
         if (max_tokens or self.max_tokens) and not self.enable_thinking:
             kwargs["max_tokens"] = max_tokens or self.max_tokens
         USAGE[kind + "_calls"] += 1
         if not self.enable_thinking:
-            reply = self.client.chat.completions.create(**kwargs)
+            reply = create_chat(self.client, **kwargs)
             self._count(kind, reply.usage)
             return reply.choices[0].message.content or ""
         parts = []

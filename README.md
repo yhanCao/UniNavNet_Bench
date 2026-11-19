@@ -101,13 +101,12 @@ uninavbench batch -a examples/agents/random_agent.py -p test --levels static sma
 Active-EQA answers are scored by an LLM judge, any OpenAI-compatible chat API:
 
 ```bash
-export UNINAVBENCH_JUDGE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+export UNINAVBENCH_JUDGE_BASE_URL=https://api.openai.com/v1
 export UNINAVBENCH_JUDGE_MODEL=gpt-6.2-sol
 export UNINAVBENCH_JUDGE_API_KEY=...
-export UNINAVBENCH_JUDGE_EXTRA_BODY='{"enable_thinking": false}'   # optional, passed to the API
 ```
 
-`UNINAVBENCH_JUDGE=exact` scores by exact string match instead (no API; for tests).
+`UNINAVBENCH_JUDGE_EXTRA_BODY` optionally passes provider-specific request fields as JSON. `UNINAVBENCH_JUDGE=exact` scores by exact string match instead (no API; for tests).
 
 ### Evaluation protocol
 
@@ -144,8 +143,8 @@ pip install '.[st-map]'
 
 ```yaml
 openseed_checkpoint: /path/to/openseed_swinl_pano_sota.pt
-llm: {base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: qwen3.8-flash}
-vlm: {base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: qwen3.8-flash}
+llm: {base_url: "https://api.openai.com/v1", model: gpt-6.2-sol}
+vlm: {base_url: "https://api.openai.com/v1", model: gpt-6.2-sol}
 ```
 
 **Run.**
@@ -159,7 +158,7 @@ uninavbench run -a uninavbench.agents.st_map -p test -i 0 -l all -t nav -es 0 -e
 Notes:
 
 - Speed: about 0.5 s per step on an RTX 4090 with 16.5 GB of GPU memory (one instance per 24 GB GPU).
-- Tokens: thinking is off by default; the planner sees one line per candidate node and replies with a short JSON, and goal verification sends crops of the candidate scaled to 320 px. Token counts per call kind are written to `ST-Map/usage.json`.
+- Tokens: the planner sees one line per candidate node and replies with a short JSON, and goal verification sends crops of the candidate scaled to 320 px. Token counts per call kind are written to `ST-Map/usage.json`.
 - Memory and disk use stay bounded over an episode (a few views per object, a capped history archive, unused frames deleted). `debug_artifacts: true` additionally saves per-step data and plots.
 - Active-EQA: the agent searches for the object a question mentions and answers once, when it stops or on its last step, from the current frame and close-ups of the target. This answer step is a minimal addition, not part of ST-CogNav.
 

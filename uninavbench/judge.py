@@ -3,6 +3,8 @@ import json
 import os
 import re
 
+from .chat import create_chat
+
 SYSTEM_PROMPT = '''You are an AI assistant who will help me to evaluate the response given the question and the correct answer.
 To mark a response, you should output a single integer between 1 and 5 (including 1, 5).
 5 means that the response perfectly matches the answer.
@@ -43,7 +45,7 @@ class LLMJudge:
     def __init__(self, base_url=None, model=None, api_key_env="UNINAVBENCH_JUDGE_API_KEY", extra_body=None):
         from openai import OpenAI
         self.model = os.environ.get("UNINAVBENCH_JUDGE_MODEL", model or "default")
-        env_body = os.environ.get("UNINAVBENCH_JUDGE_EXTRA_BODY")  # JSON, e.g. {"enable_thinking": false}
+        env_body = os.environ.get("UNINAVBENCH_JUDGE_EXTRA_BODY")  # JSON with provider-specific request fields
         self.extra_body = json.loads(env_body) if env_body else (extra_body or {})
         base_url = os.environ.get("UNINAVBENCH_JUDGE_BASE_URL", base_url)
         # configured lazily so that navigation-only evaluation needs no judge
@@ -57,7 +59,8 @@ class LLMJudge:
         if self.client is None:
             raise RuntimeError("Active-EQA needs an LLM judge: set UNINAVBENCH_JUDGE_BASE_URL, UNINAVBENCH_JUDGE_MODEL "
                                "and UNINAVBENCH_JUDGE_API_KEY (any OpenAI-compatible chat API), or UNINAVBENCH_JUDGE=exact")
-        response = self.client.chat.completions.create(
+        response = create_chat(
+            self.client,
             model=self.model,
             messages=[
                 {'role': 'system', 'content': SYSTEM_PROMPT},
