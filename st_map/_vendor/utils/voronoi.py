@@ -1249,6 +1249,8 @@ def merge_nodes(G,threshold=1):
     pos_graph = nx.get_node_attributes(G, 'pos')
     points = np.array(list(pos_graph.values()))
     nodes = np.array(list(pos_graph.keys()))
+    if len(points) < 2:  # nothing to merge (an empty graph gives a 1-D array)
+        return G
     diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]
     distances = np.linalg.norm(diff, axis=2)
     triu_indices = np.triu_indices(distances.shape[0], k=0)  # k=1 排除对角线
