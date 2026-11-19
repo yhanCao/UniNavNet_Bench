@@ -16,5 +16,5 @@ modelscope upload yhncao/UniNavBench release/ --repo-type dataset             # 
 
 Upload the changed shards, `manifest.json` and the dataset card in one commit, so that the manifest never
 refers to shards that are not there yet, and compare the remote LFS sha256 of every shard with the
-manifest afterwards. Repairs of released data are documented in `repairs/` on the dataset repository and
-in [nav-220-229-repair.md](nav-220-229-repair.md).
+manifest afterwards. Fixes to released data are applied to the files themselves and summarized in the
+dataset card ("Changes in this release"); see also [nav-220-229-repair.md](nav-220-229-repair.md).

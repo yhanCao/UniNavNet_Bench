@@ -34,8 +34,7 @@ full simulator sweep.
 
 Original bytes, cache snapshots, source locations of every added task, random seed
 recipe, before/after hashes and the applied report are retained by the maintainers.
-The per-task provenance of the added tasks is published on the Hub as
-`repairs/train_220_229_20261114.json`. The maintainers' repair directory contains:
+The dataset card on the Hub summarizes the repair. The maintainers' repair directory contains:
 
 - `original/`: exact original six files.
 - `visibility-cache/`: the visibility evidence used by the repair.
