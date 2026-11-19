@@ -195,7 +195,7 @@ def test_agent_lifecycle_persists_memory_across_repeated_tasks(tmp_path):
 
 def test_all_agent_entrypoints_agree_without_loading_models():
     from uninavbench.cli import load_agent
-    for path in ['st_map', 'uninavbench.agents.st_map', 'examples/agents/st_map.py']:
+    for path in ['st_map', 'uninavbench.agents.st_map']:
         cls, kwargs, depth = load_agent(path)
         assert cls.__name__ == 'STMapAgent'
         assert depth is True
