@@ -16,7 +16,8 @@ from .startx import startx
 from .judge import create_judge
 from .data import default_data_dir
 from ai2thor.util.metrics import compute_single_spl,get_shortest_path_to_object,get_shortest_path_to_point
-from .utils import *
+import numpy as np
+from .utils import draw_top_down_frame, get_target_answer
 
 DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "configs", "procthor.yaml")
 PROCTHOR_REVISION = "439193522244720b86d8c81cde2e51e3a4d150cf"

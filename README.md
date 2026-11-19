@@ -27,8 +27,8 @@ The default evaluation pins ProcTHOR revision `439193522244720b86d8c81cde2e51e3a
 ## Dataset
 
 ```bash
-uninavbench download --split test             # ~4.3 GB  -> ~/.cache/uninavbench/data
 uninavbench download --split mini_test        # ~90 MB, three test scenes: 0, 4, 6
+uninavbench download --split test             # ~4.3 GB  -> ~/.cache/uninavbench/data
 uninavbench download --split train val test   # everything (~44 GB)
 uninavbench download --split test --scenes 0 4 7
 ```
