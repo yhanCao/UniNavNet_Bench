@@ -119,7 +119,7 @@ The judge is any OpenAI-compatible chat API:
 
 ```bash
 export UNINAVBENCH_JUDGE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-export UNINAVBENCH_JUDGE_MODEL=qwen3.8-flash
+export UNINAVBENCH_JUDGE_MODEL=gpt-6.2-sol
 export UNINAVBENCH_JUDGE_API_KEY=...
 export UNINAVBENCH_JUDGE_EXTRA_BODY='{"enable_thinking": false}'   # optional, passed to the API
 ```
