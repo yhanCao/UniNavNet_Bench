@@ -8,22 +8,19 @@
 """
 MaskFormer criterion.
 """
-import logging
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from timm.loss import SoftTargetCrossEntropy
 from detectron2.utils.comm import get_world_size
 from detectron2.projects.point_rend.point_features import (
     get_uncertain_point_coords_with_randomness,
     point_sample,
 )
 
-from ..utils.misc import is_dist_avail_and_initialized, nested_tensor_from_tensor_list, _max_by_axis
+from ..utils.misc import is_dist_avail_and_initialized, nested_tensor_from_tensor_list
 from ..utils import box_ops
-import random
 
 
 def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):

@@ -3,7 +3,6 @@ import torch.nn as nn
 
 from detectron2.modeling import ShapeSpec
 
-# from ..layers import ShapeSpec
 
 __all__ = ["Backbone"]
 
@@ -26,7 +25,6 @@ class Backbone(nn.Module):
         Returns:
             dict[str->Tensor]: mapping from feature name (e.g., "res2") to tensor
         """
-        pass
 
     @property
     def size_divisibility(self) -> int:

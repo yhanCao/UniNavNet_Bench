@@ -59,6 +59,5 @@ class PositionEmbeddingSine(nn.Module):
             "normalize: {}".format(self.normalize),
             "scale: {}".format(self.scale),
         ]
-        # _repr_indent = 4
         lines = [head] + [" " * _repr_indent + line for line in body]
         return "\n".join(lines)

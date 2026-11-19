@@ -250,10 +250,7 @@ class SwinTransformerBlock(nn.Module):
         assert L == H * W, "input feature has wrong size"
 
         # HACK model will not upsampling
-        # if min([H, W]) <= self.window_size:
             # if window size is larger than input resolution, we don't partition windows
-            # self.shift_size = 0
-            # self.window_size = min([H,W])
 
         shortcut = x
         x = self.norm1(x)
@@ -678,8 +675,6 @@ class SwinTransformer(nn.Module):
             )
 
             if need_init:
-                # if verbose:
-                #     logger.info(f'=> init {k} from {pretrained}')
 
                 if 'relative_position_bias_table' in k and v.size() != model_dict[k].size():
                     relative_position_bias_table_pretrained = v

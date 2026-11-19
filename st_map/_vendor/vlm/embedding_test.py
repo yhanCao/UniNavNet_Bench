@@ -32,17 +32,6 @@ class EmbeddingText():
         vector_db = FAISS.from_documents(texts, self.embedding_model)
         results = vector_db.similarity_search_with_relevance_scores(query_txt, k=5)
         return results
-    def target_query(self,query_txt,classes):
-        from langchain_community.vectorstores import FAISS
-        from langchain_text_splitters import CharacterTextSplitter
-        text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        texts = text_splitter.create_documents(
-            classes,
-            metadatas=[{"original_index": index} for index in range(len(classes))]
-        )
-        vector_db = FAISS.from_documents(texts, self.embedding_model)
-        results = vector_db.similarity_search_with_relevance_scores(query_txt, k=5)
-        return results
     def query(self,text1,text2):
         embedding1 = self.model.encode(text1, convert_to_tensor=True)
         embedding2 = self.model.encode(text2, convert_to_tensor=True)
@@ -57,4 +46,3 @@ class EmbeddingText():
     def compute_target_feat(self,target_object):
         embedding2 = self.model.encode(target_object, convert_to_tensor=True, show_progress_bar=False)
         self.target_feat = embedding2.unsqueeze(0)
-# print(f"Semantic similarity between Trash bin Can and GarbageCan: {similarity.item():.4f}")

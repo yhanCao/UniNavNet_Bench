@@ -4,14 +4,11 @@
 # Licensed under the Apache License, Version 2.0 [see LICENSE for details]
 # ------------------------------------------------------------------------
 # Modified from Mask2Former https://github.com/facebookresearch/Mask2Former by Feng Li and Hao Zhang.
-import logging
 import fvcore.nn.weight_init as weight_init
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from detectron2.layers import Conv2d
-from detectron2.utils.registry import Registry
 from detectron2.structures import BitMasks
 from timm.models.layers import trunc_normal_
 
@@ -109,10 +106,8 @@ class MaskDINODecoder(nn.Module):
         self.semantic_ce_loss = semantic_ce_loss
         self.no_update=no_update
         # learnable query features
-        # if not two_stage or self.learn_tgt:
         self.num_queries_stuff=num_queries_stuff
         self.query_feat = nn.Embedding(num_queries_stuff, hidden_dim)
-        # if not two_stage and initialize_box_type == 'no':
         self.query_embed = nn.Embedding(num_queries_stuff, 4)
         if two_stage:
             self.enc_output = nn.Linear(hidden_dim, hidden_dim)
@@ -128,7 +123,6 @@ class MaskDINODecoder(nn.Module):
         self.num_classes=num_classes
         # output FFNs
         assert self.mask_classification, "why not class embedding?"
-        # self.label_enc=nn.Embedding(505, hidden_dim)  # this is a hack for o365+coco (365+133=498)
         self.dim_proj = dim_proj
         self.lang_encoder = lang_encoder
         self.lang_mapper = nn.Parameter(torch.empty(dim_proj, hidden_dim))
@@ -229,8 +223,6 @@ class MaskDINODecoder(nn.Module):
             unmask_bbox = unmask_label = torch.cat(known)
             labels = torch.cat([t['labels'] for t in targets])
             # use languge as denosing content queries.
-            # if task == 'det':
-            #     labels = labels  # o365 start from 133 class
             boxes = torch.cat([t['boxes'] for t in targets])
             batch_idx = torch.cat([torch.full_like(t['labels'].long(), i) for i, t in enumerate(targets)])
             # known
@@ -255,7 +247,6 @@ class MaskDINODecoder(nn.Module):
             if task=="cls":
                 known_labels_expaned=torch.zeros_like(known_labels_expaned)
             m = known_labels_expaned.long().to('cuda')
-            # import ipdb; ipdb.set_trace()
             if task=="cls":
                 input_label_embed=self.cls_emb(m)
             else:
@@ -372,167 +363,6 @@ class MaskDINODecoder(nn.Module):
         outputs_coord_list = torch.stack(outputs_coord_list)
         return outputs_coord_list
 
-    def forward_cls(self, x, mask_features, masks, targets=None, target_queries=None, target_vlp=None,
-                extra={}):
-        """
-        task: seg/det
-        """
-        assert len(x) == self.num_feature_levels
-        do_seg = False# if task is det, not do segmentation training
-        size_list = []
-        # disable mask, it does not affect performance
-        enable_mask = 0
-        if masks is not None:
-            for src in x:
-                if src.size(2) % 32 or src.size(3) % 32:
-                    enable_mask = 1
-        if enable_mask == 0:
-            masks = [torch.zeros((src.size(0), src.size(2), src.size(3)), device=src.device, dtype=torch.bool) for src
-                     in x]
-        src_flatten = []
-        mask_flatten = []
-        spatial_shapes = []
-        for i in range(self.num_feature_levels):
-            idx = self.num_feature_levels - 1 - i
-            bs, c, h, w = x[idx].shape
-            size_list.append(x[i].shape[-2:])
-            spatial_shapes.append(x[idx].shape[-2:])
-            src_flatten.append(self.input_proj[idx](x[idx]).flatten(2).transpose(1, 2))
-            mask_flatten.append(masks[i].flatten(1))
-        src_flatten = torch.cat(src_flatten, 1)  # bs, \sum{hxw}, c
-        mask_flatten = torch.cat(mask_flatten, 1)  # bs, \sum{hxw}
-        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
-        level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
-
-        predictions_class = []
-        predictions_mask = []
-        # if self.two_stage:
-        #     output_memory, output_proposals = gen_encoder_output_proposals(src_flatten, mask_flatten, spatial_shapes)
-        #     output_memory = self.enc_output_norm(self.enc_output(output_memory))
-        #     output_memory_ = output_memory @ self.class_embed
-        #     enc_outputs_class_unselected = self.lang_encoder.compute_similarity(output_memory_)
-        #     enc_outputs_class_unselected[output_proposals.sum(-1).isinf()] = float("-inf")
-        #     # enc_outputs_class_unselected = self.class_embed(output_memory)
-        #     enc_outputs_coord_unselected = self._bbox_embed(
-        #         output_memory) + output_proposals  # (bs, \sum{hw}, 4) unsigmoid
-        #     topk = self.num_queries
-        #     topk_proposals = torch.topk(enc_outputs_class_unselected.max(-1)[0], topk, dim=1)[1]
-        #     refpoint_embed_undetach = torch.gather(enc_outputs_coord_unselected, 1,
-        #                                            topk_proposals.unsqueeze(-1).repeat(1, 1, 4))  # unsigmoid
-        #     refpoint_embed = refpoint_embed_undetach.detach()
-        #
-        #     tgt_undetach = torch.gather(output_memory, 1,
-        #                                 topk_proposals.unsqueeze(-1).repeat(1, 1, self.hidden_dim))  # unsigmoid
-        #     outputs_class, outputs_mask = self.forward_prediction_heads(tgt_undetach.transpose(0, 1), mask_features,
-        #                                                                 do_seg)
-        #     tgt = tgt_undetach.detach()
-        #     if self.learn_tgt:
-        #         tgt = self.query_feat.weight[None].repeat(bs, 1, 1)
-        #     interm_outputs = dict()
-        #     interm_outputs['pred_logits'] = outputs_class
-        #     interm_outputs['pred_boxes'] = refpoint_embed_undetach.sigmoid()
-        #     interm_outputs['pred_masks'] = outputs_mask
-        #
-        #     if self.initialize_box_type != 'no' and do_seg:
-        #         # convert masks into boxes to better initialize box in the decoder
-        #         assert self.initial_pred
-        #         flaten_mask = outputs_mask.detach().flatten(0, 1)
-        #         h, w = outputs_mask.shape[-2:]
-        #         if self.initialize_box_type == 'bitmask':  # slower, but more accurate
-        #             refpoint_embed = BitMasks(flaten_mask > 0).get_bounding_boxes().tensor.cuda()
-        #         elif self.initialize_box_type == 'mask2box':  # faster conversion
-        #             refpoint_embed = box_ops.masks_to_boxes(flaten_mask > 0).cuda()
-        #         else:
-        #             assert NotImplementedError
-        #         refpoint_embed = box_ops.box_xyxy_to_cxcywh(refpoint_embed) / torch.as_tensor([w, h, w, h],
-        #                                                                                       dtype=torch.float).cuda()
-        #         refpoint_embed = refpoint_embed.reshape(outputs_mask.shape[0], outputs_mask.shape[1], 4)
-        #         refpoint_embed = inverse_sigmoid(refpoint_embed)
-        # elif not self.two_stage:
-        #     tgt = self.query_feat.weight[None].repeat(bs, 1, 1)
-        #     refpoint_embed = self.query_embed.weight[None].repeat(bs, 1, 1)
-
-        tgt_mask = None
-        mask_dict = None
-        # if self.dn != "no" and self.training:
-        assert targets is not None
-        input_query_label, input_query_bbox, tgt_mask, mask_dict = \
-            self.prepare_for_dn(targets, None, None, x[0].shape[0],task="cls")
-        # if mask_dict is not None:
-        tgt = input_query_label
-        refpoint_embed = input_query_bbox
-
-        # direct prediction from the matching and denoising part in the begining
-        if self.initial_pred:
-            outputs_class, outputs_mask = self.forward_prediction_heads(tgt.transpose(0, 1), mask_features,
-                                                                        self.training and do_seg)
-            predictions_class.append(outputs_class)
-            predictions_mask.append(outputs_mask)
-        # if self.dn != "no" and self.training and mask_dict is not None:
-        tgt=tgt.float()
-        hs, references = self.decoder(
-            tgt=tgt.transpose(0, 1),
-            memory=src_flatten.transpose(0, 1),
-            memory_key_padding_mask=mask_flatten,
-            pos=None,
-            refpoints_unsigmoid=refpoint_embed.transpose(0, 1),
-            level_start_index=level_start_index,
-            spatial_shapes=spatial_shapes,
-            valid_ratios=valid_ratios,
-            tgt_mask=None,
-            no_update=self.no_update,
-        )
-
-        for i, output in enumerate(hs):
-            outputs_class, outputs_mask = self.forward_prediction_heads(output.transpose(0, 1), mask_features, (
-                        self.training or (i == len(hs) - 1)) and do_seg)
-            predictions_class.append(outputs_class)
-            predictions_mask.append(outputs_mask)
-
-        # iteratively box prediction
-        # if self.initial_pred:
-        #     out_boxes = self.pred_box(references, hs, refpoint_embed.sigmoid())
-        #     assert len(predictions_class) == self.num_layers + 1
-        # else:
-        #     out_boxes = self.pred_box(references, hs)
-        if mask_dict is not None:
-            predictions_mask = None if not do_seg else torch.stack(predictions_mask)
-            predictions_class = torch.stack(predictions_class)
-            # predictions_class, out_boxes, predictions_mask = \
-            #     self.dn_post_process(predictions_class, out_boxes, mask_dict, predictions_mask)
-            predictions_class = list(predictions_class)
-
-            if predictions_mask is None:
-                predictions_class[-1] = predictions_class[-1] + 0.0 * self.lang_mapper[0, 0]
-                for i in range(self.mask_embed.num_layers):
-                    predictions_class[-1] = predictions_class[-1] + 0.0 * (
-                                self.mask_embed.layers[i].weight[0][0] + self.mask_embed.layers[i].bias[
-                            0])  # avoid no mask loss
-                predictions_class[-1] = predictions_class[-1] + 0.0 * mask_features[0][0][0][0]  # avoid no mask loss
-
-            # if do_seg:
-            #     predictions_mask = list(predictions_mask)
-        elif self.training:  # this is to insure self.label_enc participate in the model
-            predictions_class[-1] = predictions_class[-1] + 0.0 * self.lang_mapper[0, 0]
-            for i in range(self.mask_embed.num_layers):
-                predictions_class[-1] = predictions_class[-1] + 0.0 * (
-                        self.mask_embed.layers[i].weight[0][0] + self.mask_embed.layers[i].bias[
-                    0])  # avoid no mask loss
-            predictions_class[-1] = predictions_class[-1] + 0.0 * mask_features[0][0][0][0]  # avoid no mask loss
-
-        out = {
-            'pred_logits': predictions_class[-1],
-            'pred_masks': None if not do_seg else predictions_mask[-1],
-            # 'pred_boxes': out_boxes[-1],
-            'aux_outputs': self._set_aux_loss(
-                predictions_class if self.mask_classification else None, predictions_mask
-            )
-        }
-        # if self.two_stage:
-        #     out['interm_outputs'] = interm_outputs
-
-        return out, None
 
     def forward(self, x, mask_features, masks, targets=None, target_queries=None, target_vlp=None, task='seg', extra={}):
         """
@@ -568,13 +398,11 @@ class MaskDINODecoder(nn.Module):
         predictions_class = []
         predictions_mask = []
         decoder_outputs=[]
-        # if self.two_stage:
         output_memory, output_proposals = gen_encoder_output_proposals(src_flatten, mask_flatten, spatial_shapes)
         output_memory = self.enc_output_norm(self.enc_output(output_memory))
         output_memory_ = output_memory @ self.class_embed
         enc_outputs_class_unselected = self.lang_encoder.compute_similarity(output_memory_)
         enc_outputs_class_unselected[output_proposals.sum(-1).isinf()] = float("-inf")
-        # enc_outputs_class_unselected = self.class_embed(output_memory)
         enc_outputs_coord_unselected = self._bbox_embed(
             output_memory) + output_proposals  # (bs, \sum{hw}, 4) unsigmoid
         topk = self.num_queries if self.training else self.num_queries_test
@@ -630,7 +458,6 @@ class MaskDINODecoder(nn.Module):
             outputs_class, outputs_mask,decoder_output = self.forward_prediction_heads(tgt.transpose(0, 1), mask_features, self.training and do_seg)
             if not (task == 'seg' or not self.training):
                 outputs_class=outputs_class[:,:-self.num_queries_stuff]
-                # outputs_mask=outputs_mask[:,:-self.num_queries_stuff]
             predictions_class.append(outputs_class)
             predictions_mask.append(outputs_mask)
             decoder_outputs.append(decoder_output)
@@ -720,7 +547,6 @@ class MaskDINODecoder(nn.Module):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        # if self.mask_classification:
         if out_boxes is None:
             if outputs_seg_masks is None:
                 return [

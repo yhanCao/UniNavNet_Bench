@@ -1,55 +1,12 @@
-import os, sys
-import torch
+import os
 import numpy as np
-import omegaconf
 from omegaconf import DictConfig
 from pathlib import Path
 import yaml
-import open3d as o3d
 import cv2
 import pickle
-import copy
 
 radian = 180 / np.pi
-
-def get_new_pose_from_rel_pose_batch(pose, rel_pose_change):
-    pose[:, 1] += rel_pose_change[:, 0] * torch.sin(pose[:, 2] / radian) +\
-                  rel_pose_change[:, 1] * torch.cos(pose[:, 2] / radian)
-    pose[:, 0] += rel_pose_change[:, 0] * torch.cos(pose[:, 2] / radian) -\
-                  rel_pose_change[:, 1] * torch.sin(pose[:, 2] / radian)
-
-    pose[:, 2] += rel_pose_change[:, 2] * radian
-    pose[:, 2] = torch.fmod(pose[:, 2] - 180.0, 360.0) + 180.0
-    pose[:, 2] = torch.fmod(pose[:, 2] + 180.0, 360.0) - 180.0
-
-    return pose
-
-def _object_query_constructor(objects):
-    """
-    Construct a query string based on a list of objects
-
-    Args:
-        objects: torch.tensor of object indices contained in a room
-
-    Returns:
-        str query describing the room, eg "This is a room containing
-            toilets and sinks."
-    """
-    assert len(objects) > 0
-    query_str = "This room contains "
-    names = []
-    for ob in objects:
-        names.append(ob)
-    if len(names) == 1:
-        query_str += names[0]
-    elif len(names) == 2:
-        query_str += names[0] + " and " + names[1]
-    else:
-        for name in names[:-1]:
-            query_str += name + ", "
-        query_str += "and " + names[-1]
-    query_str += "."
-    return query_str
 
 
 def process_cfg(cfg: DictConfig):
@@ -59,11 +16,6 @@ def process_cfg(cfg: DictConfig):
     if cfg.dataset_config.name != "multiscan.yaml":
         # For datasets whose depth and RGB have the same resolution
         # Set the desired image heights and width from the dataset config
-        # dataset_cfg = omegaconf.OmegaConf.load(cfg.dataset_config)
-        # if cfg.image_height is None:
-        #     cfg.image_height = dataset_cfg.camera_params.image_height
-        # if cfg.image_width is None:
-        #     cfg.image_width = dataset_cfg.camera_params.image_width
         print(f"Setting image height and width to {cfg.image_height} x {cfg.image_width}")
     else:
         # For dataset whose depth and RGB have different resolutions
@@ -129,53 +81,8 @@ def camera_param_to_camera_matrix(camera_param):
                               [0.0, 0.0, 0.0, 0.0]])
     return camera_matrix
 
-def bev_pose_to_4x4_matrix(points_pose):
-    x, y, theta = points_pose
-    R = np.array([
-        [np.cos(theta), -np.sin(theta), 0],
-        [np.sin(theta), np.cos(theta), 0],
-        [0, 0, 1]
-    ])
 
-    T = np.array([
-        [1, 0, 0, x],
-        [0, 1, 0, y],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ])
-
-    R_homogeneous = np.eye(4)
-    R_homogeneous[:3, :3] = R
-
-    points_pose_matrix = np.dot(T, R_homogeneous)
-    return points_pose_matrix
-
-
-def debug_show_pcd_array(pcd_array):
-    vis = o3d.visualization.Visualizer()
-    vis.create_window(window_name='debug_show_pcd')
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pcd_array.reshape(-1, 3))
-    pcd.estimate_normals()
-    vis.add_geometry(pcd)
-    vis.run()
-
-def debug_write_pcd_array(pcd_array, path):
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pcd_array.reshape(-1, 3))
-    pcd.estimate_normals()
-    o3d.io.write_point_cloud(path, pcd)
-
-def debug_show_pcd(pcd):
-    vis = o3d.visualization.Visualizer()
-    vis.create_window(window_name='debug_show_pcd')
-    vis.add_geometry(pcd)
-    vis.run()
-
-def debug_write_pcd(pcd, path):
-    o3d.io.write_point_cloud(path, pcd)
-
-# @brief: 深度图的预处理，测试版本中用到的函数，v1 version后没用。
+# @brief: depth preprocessing used by an early test version, unused since v1.
 def preprocess_depth(depth, min_d, max_d):
     depth = depth[:, :, 0] * 1
 
@@ -187,24 +94,9 @@ def preprocess_depth(depth, min_d, max_d):
 
     return depth
 
-# @brief: 保存原图， 640 * 480
-def save_ori_obs_rgbd(ori_obs, idx, path='/home/island/Desktop/navigation/LLM-SG/outputs'):
-    path_dir_save = os.path.join(path, 'save_ori_obs_rgbd')
-    if not os.path.exists(path_dir_save):
-        os.makedirs(path_dir_save)
+# @brief: saves the 640 x 480 image
 
-    save_obs = ori_obs.transpose(1, 2, 0)
-    rgb = save_obs[:, :, :3].astype(np.uint8)
-    save_obs[:, :, 3] = preprocess_depth(save_obs[:, :, 3, None], 0.5, 5.0)
-    _rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
-    # 保存npy
-    np.save(os.path.join(path_dir_save, '{}.npy'.format(idx)), save_obs[:, :, :4])
-
-    cv2.imwrite(os.path.join(path_dir_save, '{}.jpg'.format(idx)), _rgb)
-
-    print('save_ori_obs_rgbd')
-
-# @brief: 保存中途构建Scene Graph的元素，包括rgb depth objects pose. 其中
+# @brief: saves the inputs of an intermediate scene graph (rgb, depth, objects, pose), where
 def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/home/caoyihan/Code/LLM-SG/outputs', flag_save_rgb=True):
     image_dir_save = os.path.join(path, 'image')
     if not os.path.exists(image_dir_save):
@@ -218,16 +110,11 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
     depth = preprocess_depth(_obs[:, :, 3, None], 0.5, 5.0)
     rgb = _obs[:, :, :3]
 
-    # _objects = copy.deepcopy(objects)
-    # for ob in _objects:
-    #     pcd = ob['pcd']
     #     pcd_data = {
     #         'points': np.asarray(pcd.points),
     #         'colors': np.asarray(pcd.colors) if pcd.has_colors() else None,
     #         'normals': np.asarray(pcd.normals) if pcd.has_normals() else None
     #     }
-    #     ob['pcd'] = pcd_data
-    #     if isinstance(ob['bbox'], o3d.geometry.AxisAlignedBoundingBox):
     #         ob['bbox'] = {
     #             'min_bound': np.asarray(ob['bbox'].min_bound),
     #             'max_bound': np.asarray(ob['bbox'].max_bound)
@@ -239,17 +126,12 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
     #             'extent': np.asarray(ob['bbox'].extent)
     #         }
 
-    # _bg_objects = copy.deepcopy(bg_objects)
-    # for ob in _bg_objects:
-    #     pcd = _bg_objects[ob]['pcd']
     #     pcd_data = {
     #         'points': np.asarray(pcd.points),
     #         'colors': np.asarray(pcd.colors) if pcd.has_colors() else None,
     #         'normals': np.asarray(pcd.normals) if pcd.has_normals() else None
     #     }
-    #     _bg_objects[ob]['pcd'] = pcd_data
 
-    #     if isinstance(_bg_objects[ob]['bbox'], o3d.geometry.AxisAlignedBoundingBox):
     #         _bg_objects[ob]['bbox'] = {
     #             'min_bound': np.asarray(_bg_objects[ob]['bbox'].min_bound),
     #             'max_bound': np.asarray(_bg_objects[ob]['bbox'].max_bound)
@@ -261,17 +143,12 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
     #             'extent': np.asarray(_bg_objects[ob]['bbox'].extent)
     #         }
 
-    # _fg_detection_list = copy.deepcopy(fg_detection_list)
-    # for ob in _fg_detection_list:
-    #     pcd = ob['pcd']
     #     pcd_data = {
     #         'points': np.asarray(pcd.points),
     #         'colors': np.asarray(pcd.colors) if pcd.has_colors() else None,
     #         'normals': np.asarray(pcd.normals) if pcd.has_normals() else None
     #     }
-    #     ob['pcd'] = pcd_data
 
-    #     if isinstance(ob['bbox'], o3d.geometry.AxisAlignedBoundingBox):
     #         ob['bbox'] = {
     #             'min_bound': np.asarray(ob['bbox'].min_bound),
     #             'max_bound': np.asarray(ob['bbox'].max_bound)
@@ -283,17 +160,12 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
     #             'extent': np.asarray(ob['bbox'].extent)
     #         }
 
-    # _bg_detection_list = copy.deepcopy(bg_detection_list)
-    # for ob in _bg_detection_list:
-    #     pcd = ob['pcd']
     #     pcd_data = {
     #         'points': np.asarray(pcd.points),
     #         'colors': np.asarray(pcd.colors) if pcd.has_colors() else None,
     #         'normals': np.asarray(pcd.normals) if pcd.has_normals() else None
     #     }
-    #     ob['pcd'] = pcd_data
 
-    #     if isinstance(ob['bbox'], o3d.geometry.AxisAlignedBoundingBox):
     #         ob['bbox'] = {
     #             'min_bound': np.asarray(ob['bbox'].min_bound),
     #             'max_bound': np.asarray(ob['bbox'].max_bound)
@@ -313,15 +185,10 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
     save_dict['rgb'] = rgb
     save_dict['pose'] = pose
     save_dict['cam_K'] = cam_K
-    # save_dict['objects'] = _objects
-    # save_dict['bg_objects'] = _bg_objects
     save_dict['pcd_frame'] = _pcd_frame
     save_dict['idx'] = idx
-    # save_dict['fg_detection_list'] = _fg_detection_list
-    # save_dict['bg_detection_list'] = _bg_detection_list
     with open(os.path.join(pkl_dir_save, 'save_dict_{}.pkl'.format(idx)), 'wb') as tf:
         pickle.dump(save_dict, tf)
-    # np.save(os.path.join(path_dir_save, 'save_dict_{}.npy'.format(idx)), save_dict)
 
     if flag_save_rgb:
         save_rgb = rgb.cpu().detach().numpy().astype(np.uint8)
@@ -329,8 +196,5 @@ def save_intermediate_element_for_SGG(obs, pcd_frame, idx,pose,cam_K, path='/hom
         cv2.imwrite(os.path.join(image_dir_save, '{}.jpg'.format(idx)), save_rgb)
 
     print('save_intermediate_element_for_SGG')
-
-
-
 
 

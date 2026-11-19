@@ -1,10 +1,6 @@
 import torch
 import torch.nn.functional as F
-import time
 from st_map._vendor.slam.slam_classes import MapObjectList, DetectionList
-from st_map._vendor.utils.general_utils import Timer
-from collections import Counter
-import gc
 import numpy as np
 from st_map._vendor.utils.ious import (
     compute_iou_batch, 
@@ -76,18 +72,6 @@ def comput_voxel_overlap(cfg , detection_list: DetectionList,objects: MapObjectL
         bbox_new = torch.from_numpy(np.stack(bbox_new))
         iou = compute_iou_batch(bbox_map, bbox_new) # (m, n)
 
-    # start=time.time()
-    # new_dict = {}
-    # for i in range(len(detection_list)):
-    #     new_dict[i]=mapPcdToVoxel(np.array(detection_list[i]['pcd'].points))
-    # end=time.time()
-    # print("calculate detection voxel : ", end-start)
-    # start=time.time()
-    # object_dict={}
-    # used_object=list(set((torch.max(iou,dim=1)[0] > 1e-6).nonzero().reshape(-1).cpu().numpy()))
-    # for j in used_object:
-    #     object_dict[j]=np.where(voxel_map==j)[0]
-    # end=time.time()
 
     for i in range(len(detection_list)):
         for j in range(len(objects)):
@@ -114,13 +98,13 @@ def compute_spatial_similarities(cfg, detection_list: DetectionList, objects: Ma
     obj_bboxes = objects.get_stacked_values_torch('bbox')
 
     if cfg.spatial_sim_type == "iou":
-        spatial_sim = compute_iou_batch(det_bboxes, obj_bboxes)
+        compute_iou_batch(det_bboxes, obj_bboxes)
     elif cfg.spatial_sim_type == "giou":
-        spatial_sim = compute_giou_batch(det_bboxes, obj_bboxes)
+        compute_giou_batch(det_bboxes, obj_bboxes)
     elif cfg.spatial_sim_type == "iou_accurate":
-        spatial_sim = compute_3d_iou_accuracte_batch(det_bboxes, obj_bboxes)
+        compute_3d_iou_accuracte_batch(det_bboxes, obj_bboxes)
     elif cfg.spatial_sim_type == "giou_accurate":
-        spatial_sim = compute_3d_giou_accurate_batch(det_bboxes, obj_bboxes)
+        compute_3d_giou_accurate_batch(det_bboxes, obj_bboxes)
     elif cfg.spatial_sim_type == "overlap":
         spatial_sim1,spatial_sim2 = compute_overlap_matrix_2set(cfg, objects, detection_list)
         spatial_sim1 = spatial_sim1.T
@@ -174,42 +158,11 @@ def aggregate_similarities(cfg, spatial_sim: torch.Tensor, visual_sim: torch.Ten
 #     agg_sim: torch.Tensor,
 #     agg_sim2: torch.Tensor,
 # ) -> MapObjectList:
-#     changed=[]
-#     deleted=[]
 #     # Iterate through all detections and merge them into objects
-#     for i in range(agg_sim.shape[0]):
 #         # If not matched to any object, add it as a new object
-#         if agg_sim[i].max() == float('-inf') and agg_sim2[i].max() == float('-inf'):
-#             objects.append(detection_list[i])
-#             changed.append(len(objects)-1)
 #         # Merge with most similar existing object
 #         elif agg_sim2[i].max() == float('-inf'):
-#             j = agg_sim[i].argmax()
-#             matched_det = detection_list[i]
-#             matched_obj = objects[j]
-#             merged_obj = merge_obj2_into_obj1_2(cfg, matched_obj, matched_det, run_dbscan=False)
-#             objects[j] = merged_obj
-#             changed.append(j.item())
 #         else :
-#             index=torch.where(agg_sim2[i]!=float('-inf'))[0]
-#             j = index[0]
-#             matched_det = detection_list[i]
-#             matched_obj = objects[j]
-#             merged_obj = merge_obj2_into_obj1_2(cfg, matched_obj, matched_det, run_dbscan=False)
-#             objects[j] = merged_obj
-#             changed.append(j.item())
-#             if len(index) > 1 :
-#                 for k in range(1,len(index)):
-#                     merged_obj = merge_obj2_into_obj1_2(cfg, matched_obj, objects[index[k]], run_dbscan=False)
-#                     objects[j] = merged_obj
-#                     deleted.append(index[k])
-#     new_objects = MapObjectList(device=cfg.device)
-#     for k in range(len(objects)):
-#         if k not in deleted :
-#             new_objects.append(objects[k])
-#     objects=new_objects
-#     del new_objects
-#     return objects,list(set(changed))
 def merge_detections_to_objects(
     cfg, 
     detection_list: DetectionList, 
@@ -217,7 +170,6 @@ def merge_detections_to_objects(
     agg_sim: torch.Tensor
 ) -> MapObjectList:
     changed=[]
-    # print('!!!!!!!!!!!! merge_detections_to_objects  !!!!!!!!!!!!!!!!!!')
     # Iterate through all detections and merge them into objects
     for i in range(agg_sim.shape[0]):
         # If not matched to any object, add it as a new object
@@ -251,7 +203,6 @@ def VoxelMergeStrategy(
     for i in range(agg_sim.shape[0]):
         # If not matched to any object, add it as a new object
         if agg_sim[i].max() == float('-inf'):
-            # similarity.append(textmodel.query_multiple(detection_list[i]['class_name']))
             objects.append(detection_list[i])
         # Merge with most similar existing object
         else:
@@ -259,7 +210,6 @@ def VoxelMergeStrategy(
             matched_det = detection_list[i]
             matched_obj = objects[j]
             merged_obj = merge_obj2_into_obj1(cfg, matched_obj, matched_det,shape,minbound,0.25, run_dbscan=False)
-            # similarity[j] = textmodel.query_multiple(merged_obj['class_name'])
             objects[j] = merged_obj
             
     return objects,similarity
@@ -282,7 +232,6 @@ def removalOverlap(cfg,objects,bg_objects,shape,minbound,similarity,textmodel):
                             if kept_objects[i]:
                                 # Then merge object i into object j
                                 objects[i] = merge_obj2_into_obj1(cfg, objects[j], objects[i],shape,minbound,0.25, run_dbscan=True)
-                                # similarity[i] = textmodel.query_multiple(objects[i]['class_name'])
                                 objects[j] = None
                                 kept_objects[j] = False
                         else:
@@ -321,7 +270,6 @@ def removalOverlap(cfg,objects,bg_objects,shape,minbound,similarity,textmodel):
                 if len(objects[i]['voxel_index']) < 5 :
                     kept_objects[i] = False
         new_objects = [obj for obj, keep in zip(objects, kept_objects) if keep]
-        # similarity = [similarity[i] for i, keep in enumerate(kept_objects) if keep]
         objects = MapObjectList(new_objects)
     return objects,bg_objects,similarity
 def updateVoxelandObject(voxel_map_dict,objects,voxel_map,changed):

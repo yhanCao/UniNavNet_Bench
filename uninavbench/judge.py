@@ -76,10 +76,6 @@ class LLMJudge:
         match = re.search(r"[1-5]", content)
         return int(match.group()) if match else 1
 
-    # name used by the original evaluator
-    def scoring_eqa(self, question, gt_answer, answer):
-        return self.score(question, gt_answer, answer)
-
 
 def _normalize(value):
     if isinstance(value, (list, tuple)):
@@ -99,8 +95,6 @@ class ExactMatchJudge:
             except (ValueError, TypeError):
                 pass
         return 5 if _normalize(gt_answer) == _normalize(answer) else 1
-
-    scoring_eqa = score
 
 
 def create_judge(config):

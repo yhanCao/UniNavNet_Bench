@@ -18,11 +18,10 @@ from ..body import build_openseed_head
 from ..modules import sem_seg_postprocess, HungarianMatcher, SetCriterion
 from ..language import build_language_encoder
 
-from detectron2.structures import Boxes, ImageList, Instances, BitMasks
+from detectron2.structures import Boxes, ImageList, Instances
 from detectron2.utils.memory import retry_if_cuda_oom
 from detectron2.data import MetadataCatalog
 import random
-import json
 class OpenSeeD(nn.Module):
     """
     Main class for mask classification semantic segmentation architectures.
@@ -299,16 +298,13 @@ class OpenSeeD(nn.Module):
         return self.pixel_mean.device
 
     def forward(self, batched_inputs, inference_task='seg'):
-        # import ipdb; ipdb.set_trace()
         if self.training:
             losses = {}
             if self.task_switch['coco'] and 'coco' in batched_inputs:
                 self.criterion_coco.num_classes = 133 if 'pano' in self.train_dataset_name[0] else 80
-                # self.criterion.num_classes = 133
                 task = 'seg'
                 if not self.coco_mask_on:
                     task = 'det'
-                # import ipdb; ipdb.set_trace()
                 losses_coco = self.forward_seg(batched_inputs['coco'], task=task)
                 new_losses_coco = {}
                 for key, value in losses_coco.items():
@@ -475,7 +471,6 @@ class OpenSeeD(nn.Module):
                         mask_cls_result[:self.sem_seg_head.predictor.num_queries_test],
                         mask_pred_result[:self.sem_seg_head.predictor.num_queries_test],
                         mask_box_result[:self.sem_seg_head.predictor.num_queries_test], True)
-                    # instance_r = retry_if_cuda_oom(self.instance_inference)(mask_cls_result, mask_pred_result, mask_box_result)
                     processed_results[-1]["instances"] = instance_r
             del mask_pred_results
             return processed_results
@@ -618,14 +613,12 @@ class OpenSeeD(nn.Module):
             mask_box_result = mask_box_result[keep]
         result.pred_boxes = Boxes(mask_box_result)
         # Uncomment the following to get boxes from masks (this is slow)
-        # result.pred_boxes = BitMasks(mask_pred > 0).get_bounding_boxes()
 
         # calculate average mask prob
         if self.sem_seg_postprocess_before_inference:
             mask_scores_per_image = (mask_pred.sigmoid().flatten(1) * result.pred_masks.flatten(1)).sum(1) / (result.pred_masks.flatten(1).sum(1) + 1e-6)
         else:
             mask_scores_per_image = 1.0
-            # labels_per_image = labels_per_image + 1  # HACK for o365 classification
         if self.focus_on_box:
             mask_scores_per_image = 1.0
         result.scores = scores_per_image * mask_scores_per_image

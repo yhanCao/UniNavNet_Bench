@@ -1,4 +1,3 @@
-import os
 import logging
 
 import torch
@@ -19,8 +18,6 @@ class BaseModel(nn.Module):
         outputs = self.model(*inputs, **kwargs)
         return outputs
 
-    def save_pretrained(self, save_dir):
-        torch.save(self.model.state_dict(), save_dir)
 
     def from_pretrained(self, load_dir):
         state_dict = torch.load(load_dir, map_location='cpu')
