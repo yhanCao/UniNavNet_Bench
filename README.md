@@ -85,7 +85,7 @@ metrics = bench.evaluate(split="test", level="all", scene=0, task="nav", start=0
 print(metrics["success"], metrics["spl"], metrics["per_task_type"])
 ```
 
-Actions: `Stop`, `MoveAhead` (0.25 m), `RotateLeft`, `RotateRight` (90°), `LookUp`, `LookDown` (30°). A sub-task ends with `Stop` or after 500 steps. For the command line an agent is a module or `.py` file whose `build()` returns `(agent_class, agent_kwargs, render_depth)`.
+Actions: `Stop`, `MoveAhead` (0.25 m), `RotateLeft`, `RotateRight` (90°), `LookUp`, `LookDown` (30°). A sub-task ends with `Stop` or after 200 steps. For the command line an agent is a module or `.py` file whose `build()` returns `(agent_class, agent_kwargs, render_depth)`.
 
 ## Tasks
 

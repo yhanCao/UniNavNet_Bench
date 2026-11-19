@@ -22,7 +22,7 @@ DEFAULTS = {
     # per-step RGB-D dumps, detection overlays and path plots (grow with the episode)
     'debug_artifacts': False,
     # Active-EQA answers are given on Stop or at this step of a sub-task (the benchmark's max_steps)
-    'max_task_steps': 500,
+    'max_task_steps': 200,
 }
 
 

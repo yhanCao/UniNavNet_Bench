@@ -402,7 +402,8 @@ def calculate_pcd_overlap(x1,x2,batch_size,threshold):
     return overlap2,overlap1
 def process_pcd(pcd, cfg, run_dbscan=True):
     
-    pcd = pcd.voxel_down_sample(voxel_size=0.005)
+    # sg.yaml's downsample_voxel_size (2 cm); a hard-coded 5 mm grew large objects to millions of points
+    pcd = pcd.voxel_down_sample(voxel_size=cfg.downsample_voxel_size)
         
     # if cfg.dbscan_remove_noise and run_dbscan:
     # print("Before dbscan:", len(pcd.points))
@@ -507,7 +508,7 @@ def merge_obj2_into_obj1(cfg, obj1, obj2,shape,minbound,voxel_size, run_dbscan=F
 
     obj1['voxel_index'] = remove_outlierone(cfg,np.hstack((obj1['voxel_index'],obj2['voxel_index'])),shape,minbound,size = voxel_size,run_dbscan = run_dbscan)
     if 'pcd' in obj1.keys() and 'pcd' in obj2.keys() :
-        obj1['pcd'] = (obj1['pcd']+obj2['pcd']).voxel_down_sample(0.005)
+        obj1['pcd'] = (obj1['pcd']+obj2['pcd']).voxel_down_sample(cfg.downsample_voxel_size)
         obj1['pcd']=selectPcdFromVoxel(obj1,voxel_size,shape,minbound)
     # obj1['voxel_index'] = np.unique(np.hstack((obj1['voxel_index'],obj2['voxel_index'])))
     # if 'pcd' in obj1.keys() and 'pcd' in obj2.keys() :

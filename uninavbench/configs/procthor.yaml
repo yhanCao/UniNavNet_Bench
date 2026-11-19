@@ -15,7 +15,7 @@ procthor_revision: 439193522244720b86d8c81cde2e51e3a4d150cf
 ai2thor_commit_id: f0825767cd50d69f666c7f282e54abfe58f1e917
 width: 640
 height: 480
-max_steps: 500
+max_steps: 200
 result_path: "results/"
 scene: "Procedural"
 # save two top-down images per step under result_path (slow; for debugging)
