@@ -83,10 +83,10 @@ def validate_runtime(config):
     checkpoint = Path(config['openseed_checkpoint'])
     if not config['openseed_checkpoint'] or not checkpoint.is_file():
         raise RuntimeError('ST-Map requires an OpenSeeD checkpoint: set ST_MAP_OPENSEED_CHECKPOINT '
-                           'or openseed_checkpoint in ST_MAP_CONFIG. See docs/st-map.md.')
+                           'or openseed_checkpoint in ST_MAP_CONFIG. See the README (ST-CogNav baseline).')
     try:
         import torch
     except ImportError as exc:
-        raise RuntimeError('ST-Map requires the optional CUDA/model environment; see docs/st-map.md.') from exc
+        raise RuntimeError('ST-Map requires the optional CUDA/model environment; see the README (ST-CogNav baseline).') from exc
     if not torch.cuda.is_available():
         raise RuntimeError('ST-Map at the pinned upstream version requires CUDA; CPU execution is unsupported.')

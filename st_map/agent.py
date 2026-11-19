@@ -28,7 +28,7 @@ class STMapAgent(Agent):
             from ._vendor.agents.random_agent import SimpleRandomAgent
         except ImportError as exc:
             raise RuntimeError('Missing ST-Map model dependency: ' + str(exc) +
-                               '. Install the GPU environment described in docs/st-map.md.') from exc
+                               '. Install the GPU environment described in the README (ST-CogNav baseline).') from exc
         return SimpleRandomAgent(controller, memory_cfg=self.config['memory'], runtime_cfg=self.config)
 
     def bind_environment(self, controller, output_dir=None):

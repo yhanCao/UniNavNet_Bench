@@ -65,7 +65,7 @@ Every shard is checked against the sha256 of the release manifest. Sizes are dow
 <data>/attributes/{train,val,test}/<scene>/images/*.png      # goals of image-goal navigation
 ```
 
-An episode file is a list of episodes. Each episode holds the start pose (`initial_position`, `initial_orientation`, `initial_horizon`), the scene `time` (minutes from 00:00 of day 1; the start time of a dynamic navigation episode, the time of each Active-EQA question), and per sub-task the `instruction`, `task_type`, target (`id` / `object_type`), goal `image_name`, and for Active-EQA the `answer` (a dict from scene time to the answer valid from then on). A schedule (`strategy_final_*.json`) lists the timed object relocations and state changes with the recorded resulting poses. Repairs of the released data are described on the [dataset page](https://huggingface.co/datasets/yhncao/UniNavBench); [docs/release.md](docs/release.md) explains how the shards are built.
+An episode file is a list of episodes. Each episode holds the start pose (`initial_position`, `initial_orientation`, `initial_horizon`), the scene `time` (minutes from 00:00 of day 1; the start time of a dynamic navigation episode, the time of each Active-EQA question), and per sub-task the `instruction`, `task_type`, target (`id` / `object_type`), goal `image_name`, and for Active-EQA the `answer` (a dict from scene time to the answer valid from then on). A schedule (`strategy_final_*.json`) lists the timed object relocations and state changes with the recorded resulting poses. Changes to the released data are described on the [dataset page](https://huggingface.co/datasets/yhncao/UniNavBench). Maintainers build the shards and `manifest.json` with `scripts/build_release.py`.
 
 ## 2. Running the benchmark
 
@@ -119,7 +119,7 @@ export UNINAVBENCH_JUDGE_API_KEY=...
 - A failed scheduled simulator action aborts the run with its time, action and object.
 - Success and SPL are averaged over sub-tasks, overall and per task type.
 
-The evaluation pins ProcTHOR revision `439193522244720b86d8c81cde2e51e3a4d150cf` and AI2-THOR build `f0825767cd50d69f666c7f282e54abfe58f1e917` (config fields `procthor_revision`, `ai2thor_commit_id`); every metrics file records both and the installed package versions. See [docs/evaluation-reliability.md](docs/evaluation-reliability.md).
+The evaluation pins ProcTHOR revision `439193522244720b86d8c81cde2e51e3a4d150cf` and AI2-THOR build `f0825767cd50d69f666c7f282e54abfe58f1e917` (config fields `procthor_revision`, `ai2thor_commit_id`); every metrics file records both and the installed package versions.
 
 ### Checking an installation
 
@@ -133,11 +133,25 @@ runs privileged oracle agents through the installed package: the scheduled chang
 
 The `st_map` package is the ST-CogNav navigation agent (commit `5ac9398`), packaged as **ST-Map**: OpenSeeD detection and CLIP features, RGB-D voxel mapping, a scene graph with temporal object states and a history of removed objects, LLM selection of the next graph node, VLM verification of the goal, and a local planner. It uses the simulator's reachable positions and scene bounds for its map, so it is a privileged geometric baseline.
 
-**Environment.** A CUDA machine with Python 3.10, PyTorch, the `st-map` extra, detectron2 / pytorch3d / gradslam / panopticapi built from source, the OpenSeeD deformable-attention extension, and the OpenSeeD checkpoint `openseed_swinl_pano_sota.pt`. Step-by-step instructions are in [docs/st-map.md](docs/st-map.md).
+**Environment.** A Linux CUDA machine with Python 3.10. The upstream setup uses PyTorch 2.6 with CUDA 12.4; it also runs with PyTorch 2.3 / CUDA 11.8. Importing `st_map` does not load any model.
 
 ```bash
+conda create -n st-map python=3.10 && conda activate st-map
+pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
 pip install '.[st-map]'
+
+# dependencies that are built from source (need a CUDA compiler matching PyTorch)
+pip install 'git+https://github.com/facebookresearch/detectron2.git'
+pip install 'git+https://github.com/facebookresearch/pytorch3d.git'
+pip install 'git+https://github.com/gradslam/gradslam.git@conceptfusion'
+pip install 'git+https://github.com/cocodataset/panopticapi.git'
+
+# OpenSeeD's deformable-attention CUDA extension (source included in the package; set CUDA_HOME)
+cd "$(python -c 'from st_map.config import resource_path; print(resource_path("openseed/body/encoder/ops"))')"
+python -m pip install . --no-build-isolation
 ```
+
+Download the OpenSeeD checkpoint `openseed_swinl_pano_sota.pt`; the text-embedding, CLIP and tokenizer weights are downloaded from the Hugging Face Hub on first use.
 
 **Configuration.** Copy [st_map/configs/default.yaml](st_map/configs/default.yaml) and set the checkpoint and the LLM / VLM endpoints (any OpenAI-compatible API; one multimodal model can serve both):
 
