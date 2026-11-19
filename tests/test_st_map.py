@@ -334,3 +334,43 @@ def test_planner_prompt_is_one_line_per_node():
     assert lines[3].startswith('Node 1 : unexplored, 1.0m') and lines[3].endswith('| Sofa, Cup (last seen at timestep 3)')
     assert lines[5].startswith('Node 3 : frontier, unexplored, 20.0m')
     assert lines[-1] == 'Candidates: [1, 2, 3]' and 'Path' not in prompt
+
+
+def test_target_similarities_are_realigned_with_objects():
+    m = TemporalMemoryMixin()
+    m.objects = [record('Cup'), record('Book')]
+    m.target_similarity_with_objects = [(0.9, 1)]  # a removal left one entry behind
+    m.textmodel = SimpleNamespace(query_multiple=lambda names: (0.5 if names[0] == 'Cup' else 0.1, 0))
+    m.alignTargetSimilarity()
+    assert m.target_similarity_with_objects == [(0.5, 0), (0.1, 0)]
+    m.target_similarity_with_objects = [(0.9, 1), (0.2, 3)]
+    m.alignTargetSimilarity()  # aligned lists are left as they are
+    assert m.target_similarity_with_objects == [(0.9, 1), (0.2, 3)]
+
+
+def test_node_merging_handles_tiny_graphs():
+    voronoi = pytest.importorskip('st_map._vendor.utils.voronoi', reason='needs the st-map extra')
+    for n in (0, 1):
+        g = nx.Graph()
+        g.add_nodes_from((i, {'pos': (i, 0)}) for i in range(n))
+        assert voronoi.merge_nodes(g).number_of_nodes() == n
+    g = graph()
+    g.add_node(9, pos=(0.5, 0))
+    assert voronoi.merge_nodes(g).number_of_nodes() < 5
+
+
+def test_projection_ignores_points_behind_the_camera():
+    import warnings
+    m = TemporalMemoryMixin()
+    obj = record('Cup')
+    obj['pcd'] = SimpleNamespace(points=np.array([[0., 0., 0.], [0., 0., -1.], [0., 0., 2.]]))
+    m.objects, m.history_archive, m.changed = [obj], [], []
+    m.target_similarity_with_objects = [(0.1, 0)]
+    m.agent_history = {1: {'angle': 0, 'roll': 0, 'pos': {'x': 0, 'y': 0, 'z': 0}}}
+    m.env_camera_matrix, m.screen_w, m.screen_h = np.eye(4), 4, 4
+    m.appearance_sim_thresh = 0.5
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        with patch('st_map.memory.X_w_to_X_v', lambda R, t, p: p.T):
+            m.updateObjectState(1, '/nonexistent', None, None, np.full((4, 4), 5.))
+    assert 1 in m.objects[0]['state_dict']

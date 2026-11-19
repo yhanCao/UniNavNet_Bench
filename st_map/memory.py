@@ -127,6 +127,12 @@ class TemporalMemoryMixin:
                     os.remove(path)
                 self.saved_frames.discard(t)
 
+    def alignTargetSimilarity(self):
+        """Recomputes target similarities when a merge or removal left the list out of step with the
+        objects (target verification indexes both lists together)."""
+        if len(self.target_similarity_with_objects) != len(self.objects):
+            self.target_similarity_with_objects = [self.textmodel.query_multiple(o['class_name']) for o in self.objects]
+
     def retrieveHistoryContext(self,img_path,top_k=3,sim_thresh=0.5,use_vlm=None):
         # archived objects most related to the current instruction, with their state sequences
         if len(self.history_archive) == 0:
@@ -166,8 +172,10 @@ class TemporalMemoryMixin:
                 points_camera = self.env_camera_matrix[:3,:3] @ X_w
                 points_camera = points_camera.T
                 z = points_camera[:,-1]
-                u = np.round(points_camera[:, 0] / z).astype(np.int32)
-                v = np.round(points_camera[:, 1] / z).astype(np.int32)
+                # divide only points in front of the near plane (others would give inf / NaN pixel coordinates)
+                z_safe = np.where(z >= 0.1, z, 1.0)
+                u = np.round(points_camera[:, 0] / z_safe).astype(np.int32)
+                v = np.round(points_camera[:, 1] / z_safe).astype(np.int32)
                 
                 # Filter points inside the image plane and valid depth
                 valid = (u >= 0) & (u < self.screen_w) & \

@@ -163,10 +163,7 @@ class SimpleRandomAgent(Agent):
         end = time.time()
         # print("after: explored:",len(self.explored_node),"unexplored:",len(self.unexplored_node),"all:",len(self.explored_node)+len(self.unexplored_node))
         start = time.time()
-        mapper = self.sem_map_module
-        if len(mapper.target_similarity_with_objects) != len(mapper.objects):
-            # some merge / removal paths do not keep the similarity list aligned with the objects
-            mapper.target_similarity_with_objects = [mapper.textmodel.query_multiple(o['class_name']) for o in mapper.objects]
+        self.sem_map_module.alignTargetSimilarity()
         if self.found_goal is None and len(self.sem_map_module.target_similarity_with_objects) > 0:
             # import pdb
             # pdb.set_trace()

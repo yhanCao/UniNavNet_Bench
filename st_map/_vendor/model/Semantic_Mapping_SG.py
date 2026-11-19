@@ -513,9 +513,11 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
                 points_camera = self.env_camera_matrix[:3,:3] @ X_w
                 points_camera = points_camera.T
                 z = points_camera[:,-1]
-                u = (points_camera[:,0] / z).astype(np.int32)
-                v = (points_camera[:,1] / z).astype(np.int32)
-                index = np.where((u>=0)*(u<self.screen_w)*(v>=0)*(v<self.screen_h)*(z>=0))[0]
+                # divide only points in front of the near plane (others would give inf / NaN pixel coordinates)
+                z_safe = np.where(z >= 0.1, z, 1.0)
+                u = (points_camera[:,0] / z_safe).astype(np.int32)
+                v = (points_camera[:,1] / z_safe).astype(np.int32)
+                index = np.where((u>=0)*(u<self.screen_w)*(v>=0)*(v<self.screen_h)*(z>=0.1))[0]
                 index_buffer = np.where((depth_buffer[v[index],u[index]]==0) | (depth_buffer[v[index],u[index]]>z[index]))[0]
                 if i == obj_id :
                     ratios[idx] = len(index_buffer)/len(points) if len(points) > 0 else 0
