@@ -1,41 +1,33 @@
+import os
+
 import cv2
+import numpy as np
+import open3d as o3d
 import torch
 import torch.nn as nn
 from PIL import Image
 from st_map._vendor.utils.common import *
-import st_map._vendor.robothor_challenge.utils as du
-# from detection.groundedsam import detection, InitDetection
 from st_map._vendor.slam.slam_classes import MapObjectList
-from st_map._vendor.slam.mapping import removalOverlap
 from st_map._vendor.vlm.embedding_test import EmbeddingText
-from st_map._vendor.utils.draw_pcd import draw_voxel_objects,draw_pcd_objects
 from st_map._vendor.vlm.vlm import VLMQwQ
-import matplotlib.pyplot as plt
-import time
-import json
-import pickle as pkl
-import gzip
 from st_map.config import resource_path
 from st_map._vendor.detection.clipmodel import CLIPModel
-from omegaconf import DictConfig, OmegaConf
-from st_map._vendor.slam.utils import intrinsic_from_fov,rotation_from_euler,selectPointsFromVoxel,X_w_to_X_v,extractVoxelCenterfromVoxelmap
+from omegaconf import OmegaConf
+from st_map._vendor.slam.utils import intrinsic_from_fov, rotation_from_euler, X_w_to_X_v
 from st_map._vendor.slam.cfslam import cfvoxel
 from detectron2.data import MetadataCatalog
 from st_map._vendor.detection.openseed import detection,InitDetection
-# from detection.maskclip import detection,InitDetection
-from st_map._vendor.scenegraph.prepare import prepareRelationForCOG
-# from detection.som import generateSomPrompt,generateSoMImage,mapObjects
 import matplotlib.colors as mcolors
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 from scipy.spatial import Voronoi
 from collections import Counter
 def most_common_element(lst):
-    if not lst:  # 如果列表为空，返回 None 或抛出异常
+    if not lst:  # empty list: return None
         return None
     counter = Counter(lst)
-    most_common = counter.most_common(1)  # 返回出现次数最多的元素及其计数
-    return most_common[0][0]  # 返回元素本身
+    most_common = counter.most_common(1)  # the most frequent element and its count
+    return most_common[0][0]  # the element itself
 metadata = MetadataCatalog.get('coco_2017_train_panoptic')
 css4_colors = mcolors.CSS4_COLORS
 color_proposals = [list(mcolors.hex2color(color)) for color in css4_colors.values()]
@@ -43,30 +35,30 @@ def map_points_to_grid_centers(points,
                                offset=np.array([-0.125, -0.125]), 
                                cell_size=0.25):
     """
-    将一组二维点映射到给定网格 (offset, cell_size) 的中心。
+    Maps 2D points to the centers of the grid cells (offset, cell_size) they fall in.
     
-    参数：
+    Parameters:
     --------
     points : np.ndarray
-        形状 (n, 2) 的浮点数组，每行表示一个 (x, y) 点。
-    offset : np.ndarray 或 形如 (2,) 的可迭代对象
-        网格原点（对应索引0时的中心点位置），如 [-0.125, -0.125]。
+        float array of shape (n, 2), one (x, y) point per row.
+    offset : np.ndarray or iterable of shape (2,)
+        grid origin (center of cell 0), e.g. [-0.125, -0.125].
     cell_size : float
-        网格单元大小（宽度/高度），如 0.25。
+        cell size (width / height), e.g. 0.25.
     
-    返回：
+    Returns:
     --------
     mapped_points : np.ndarray
-        形状 (n, 2) 的数组，对应每个点被映射到网格中心后的 (x, y)。
+        array of shape (n, 2): the (x, y) cell center of each point.
     """
-    # 确保 offset 为 numpy 数组，方便后续广播运算
+    # numpy array for broadcasting
     offset = np.array(offset, dtype=np.float64)
     
-    # 1) 将 points 平移到以 offset 为“坐标原点”
-    # 2) 除以 cell_size 得到落在哪个格子（浮点格子坐标）
-    # 3) floor(...) 取整得到格子索引
-    # 4) +0.5 表示取该格子的中心
-    # 5) 乘回 cell_size 并加上 offset，即回到原始坐标系
+    # 1) shift the points so that offset is the origin
+    # 2) divide by cell_size: fractional cell coordinates
+    # 3) floor(...): cell index
+    # 4) +0.5: center of the cell
+    # 5) scale by cell_size and add offset: back to world coordinates
     mapped_points = offset + cell_size * (
         np.floor((points - offset) / cell_size) + 0.5
     )
@@ -75,16 +67,16 @@ def map_points_to_grid_centers(points,
 
 def get_grid_coordinates(points, cell_size, origin=(-0.125, -0.125)):
     """
-    计算一组点相对于网格原点的网格坐标。
-    :param points: 输入点，形状为 (n, 2)，每一行是 (x, y)
-    :param cell_size: 网格单元大小
-    :param origin: 网格原点，默认为 (-0.125, -0.125)
-    :return: 网格坐标，形状为 (n, 2)
+    Grid coordinates of points relative to the grid origin.
+    :param points: points of shape (n, 2), one (x, y) per row
+    :param cell_size: cell size
+    :param origin: grid origin, default (-0.125, -0.125)
+    :return: grid coordinates of shape (n, 2)
     """
-    # 转换坐标，相对于原点
+    # relative to the origin
     relative_points = points - origin
     
-    # 计算网格坐标，除以网格大小并取整
+    # divide by the cell size and round down
     grid_coords = np.floor(relative_points / cell_size).astype(int)
     
     return grid_coords
@@ -92,15 +84,15 @@ def are_points_in_same_grid(group1, group2, cell_size):
     contained_points = []
     not_contained_points = []
     points_contained_dict = {}
-    # 将 Group2 中的点转换为网格坐标
+    # grid coordinates of Group2
 
     group1_grid = get_grid_coordinates(group1, cell_size)
     group2_grid = get_grid_coordinates(group2, cell_size)
     
-    # 将 Group2 的网格坐标转化为一个集合，便于快速查找
-    group2_grid_set = set(map(tuple, group2_grid))  # 将每个网格坐标变为元组并存入集合
+    # Group2 cells as a set for fast lookup
+    group2_grid_set = set(map(tuple, group2_grid))  # cells as tuples
 
-    # 判断 Group1 中的每个点是否在 Group2 的网格中
+    # whether each Group1 point lies in a Group2 cell
     for grid_point,origin_point in zip(group1_grid,group1):
         if tuple(grid_point) not in group2_grid_set:
             not_contained_points.append(origin_point)
@@ -111,21 +103,21 @@ def are_points_in_same_grid(group1, group2, cell_size):
     return np.array(contained_points),np.array(not_contained_points),points_contained_dict
 def voronoi_polygons_clipped(points: np.ndarray, boundary_poly: Polygon):
     """
-    在给定多边形区域 boundary_poly 内，对 points 做 Voronoi 剖分并裁剪到边界。
+    Voronoi partition of points, clipped to the polygon boundary_poly.
 
-    参数：
+    Parameters:
     ----------
     points : np.ndarray
-        (N, 2) 形状的数组，每行一个 (x, y)。
+        array of shape (N, 2), one (x, y) per row.
     boundary_poly : Polygon
-        Shapely Polygon（或可转换为多边形的其它几何对象），表示边界。
+        Shapely Polygon (or geometry convertible to one): the boundary.
 
-    返回：
+    Returns:
     ----------
     clipped_polygons : list
-        每个元素是裁剪后的 (Multi)Polygon。可能为空，也可能包含多个或单个子多边形。
+        clipped (Multi)Polygon per point; may be empty or have several parts.
     """
-    # 1) 用 SciPy 生成 Voronoi
+    # 1) Voronoi diagram with SciPy
     vor = Voronoi(points)
     vertices=vor.vertices
     index = np.zeros([len(vertices)])
@@ -144,47 +136,46 @@ def voronoi_polygons_clipped(points: np.ndarray, boundary_poly: Polygon):
 
 def union_grid_boundary(center_points: np.ndarray, cell_size: float = 0.25):
     """
-    根据网格中心点坐标生成所有网格的并集，并返回其外边界坐标。
+    Union of the grid cells centered at the given points, and its exterior boundary coordinates.
 
-    参数：
+    Parameters:
     ----------
     center_points : np.ndarray
-        形状 (n, 2) 的数组，每一行表示一个网格中心点 (x, y)。
+        array of shape (n, 2), one cell center (x, y) per row.
     cell_size : float
-        网格大小(边长)，默认 0.25。
+        cell size (side length), default 0.25.
 
-    返回：
+    Returns:
     ----------
     boundaries : list
-        如果所有网格并集连成一个单一Polygon，则返回 [list_of_coords]；
-        如果存在多块不相连区域，则返回多个外边界坐标列表 [list_of_coords1, list_of_coords2, ...]。
+        [list_of_coords] if the union is a single Polygon;
+        [list_of_coords1, list_of_coords2, ...], one per disconnected region, otherwise.
 
-        其中每个 list_of_coords 的形式为：
+        where each list_of_coords is:
         [
             (x0, y0),
             (x1, y1),
             ...,
-            (x0, y0)    # 首尾相同，表示封闭多边形
+            (x0, y0)    # first and last equal: closed polygon
         ]
     """
-    # 半边长
+    # half side length
     half_side = cell_size / 2
 
-    # 1. 生成每个网格对应的 Polygon
+    # 1. one Polygon per cell
     polygons = []
-    # 预先计算每个中心点的 x_min, y_min, x_max, y_max
+    # x_min, y_min, x_max, y_max of every cell
     x_min = center_points[:, 0] - half_side
     y_min = center_points[:, 1] - half_side
     x_max = center_points[:, 0] + half_side
     y_max = center_points[:, 1] + half_side
 
-    # corners 数组形状: (n, 4, 2)
-    # 第一个维度对应每个网格; 第二个维度是四个角点; 第三个维度是 (x, y)
+    # corners: (n, 4, 2)
     n = center_points.shape[0]
     corners = np.empty((n, 4, 2), dtype=float)
 
-    # 依次填入 4 个顶点坐标
-    # 角点顺序: (x_min, y_min) -> (x_min, y_max) -> (x_max, y_max) -> (x_max, y_min)
+    # the 4 corners
+    # corner order: (x_min, y_min) -> (x_min, y_max) -> (x_max, y_max) -> (x_max, y_min)
     corners[:, 0, 0] = x_min
     corners[:, 0, 1] = y_min
 
@@ -197,24 +188,18 @@ def union_grid_boundary(center_points: np.ndarray, cell_size: float = 0.25):
     corners[:, 3, 0] = x_max
     corners[:, 3, 1] = y_min
 
-    # 以列表推导方式将每一行(4个顶点)变为一个 Polygon
+    # one Polygon per row of 4 corners
     polygons = [Polygon(corner) for corner in corners]
 
-    # 2. 计算并集
+    # 2. union
     union_poly = unary_union(polygons)
 
-    # 3. 提取并集外边界坐标
-    # boundaries = []
-    # if union_poly.geom_type == 'Polygon':
-    #     # 单块Polygon
-    #     boundaries.append(list(union_poly.exterior.coords))
+    # 3. exterior coordinates of the union
+    #     # single Polygon
     # elif union_poly.geom_type == 'MultiPolygon':
-    #     # 多块Polygon（不相连的区域）
-    #     for geom in union_poly.geoms:
-    #         boundaries.append(list(geom.exterior.coords))
+    #     # several Polygons (disconnected regions)
     # else:
-    #     # 根据实际需求，可做相应处理，这里简单抛出异常
-    #     raise TypeError(f"Unexpected geometry type: {union_poly.geom_type}")
+    #     # not handled: raise
 
     return union_poly
 
@@ -228,7 +213,6 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         self.screen_w = 640
         self.resolution = 0.25
         self.z_resolution = 0.25
-        # self.map_size_cm = args.map_size_cm // args.global_downscaling
         self.num_scene=1
         self.size = size
         self.min_bound=min_bound
@@ -240,18 +224,15 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         self.selected_view=[]
         self.agent_height = 1.5
         self.camera_to_agent = torch.eye(4)
-        self.env_camera_matrix = intrinsic_from_fov(self.screen_h, self.screen_w, self.fov) # 内参
+        self.env_camera_matrix = intrinsic_from_fov(self.screen_h, self.screen_w, self.fov) # camera intrinsics
         self.scene_graph={}
         self.max_pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-        # self.cog_tokenizer,self.cog_model=load_model("/home/caoyihan/Code/THUDM/cogvlm2-llama3-chinese-chat-19B-int4")
         # detection xxx
         self.BG_CLASSES =  ["wall","wall-wood", "floor", "ceiling","rug","Carpet"]
         runtime_cfg = runtime_cfg or {}
         self.cfg_detection = load_config(runtime_cfg.get("mapping_config", resource_path("sg.yaml")))
         self.cfg_detection = process_cfg(OmegaConf.create(self.cfg_detection))
         self.instance_classes_set,_ = InitDetection(runtime_cfg)
-        # self.instance_classes_set = None
-        # InitDetection(runtime_cfg)
         self.textmodel = EmbeddingText(runtime_cfg.get("embedding_model", "mixedbread-ai/mxbai-embed-large-v1"))
         self.clipmodel = CLIPModel(self.device, runtime_cfg.get("clip_model", "ViT-H-14"), runtime_cfg.get("clip_pretrained", "laion2b_s32b_b79k"))
         self.top_down_view_path = None
@@ -289,94 +270,21 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
     def forward_detection(self, obs, pcd, idx,save_path):
         image_path = os.path.join(save_path, 'image')
         visualization_path = os.path.join(save_path,"visual/")
-        # detection_path = os.path.join(save_path,"detection/")
-        # pcd_path = os.path.join(save_path,"pcd/")
-        # occupancy_map_path = os.path.join(save_path,"trajetory/")
         if not os.path.exists(image_path):
             os.makedirs(image_path)
-        # if not os.path.exists(detection_path):
-        #     os.makedirs(detection_path)
         if self.debug_artifacts and not os.path.exists(visualization_path):
             os.makedirs(visualization_path)
-        # if not os.path.exists(pcd_path):
-        #     os.makedirs(pcd_path)
-        # if not os.path.exists(occupancy_map_path):
-        #     os.makedirs(occupancy_map_path)
         Image.fromarray(obs.astype(np.uint8),'RGB').save(os.path.join(image_path, str(idx)+'.jpg'))
         self.saved_frames.add(idx)
         gobs = detection(Image.fromarray(obs.astype(np.uint8),'RGB'),idx,visualization_path if self.debug_artifacts else None)
         if gobs is not None:
             gobs = self.clipmodel.compute_clip_features(Image.fromarray(obs.astype(np.uint8),'RGB'),gobs)
-        # if detection_path is not None:
-        #     with gzip.open(detection_path+str(idx)+".pkl.gz", "wb") as f:
-        #         pkl.dump(gobs, f)
         if gobs is not None :
             res=[]# [image; pcd; intrinsic; pose]
             res.append(obs)
             res.append(pcd)
             res.append(self.env_camera_matrix)
-            # res.append(pose_curr)
-            # self.reses_history[idx]=res
             self.objects,self.bg_objects,self.target_similarity_with_objects=cfvoxel(self.cfg_detection,res,gobs,self.objects,idx=idx,step=idx,classes=self.instance_classes_set,bg_objects=self.bg_objects,img_name=os.path.join(image_path, '{}.jpg'.format(idx)),pcd_path=None,som_path=None,shape=self.size,min_bound=self.min_bound,similarity = self.target_similarity_with_objects,textmodel = self.textmodel)
-    def updateSceneGraph(self,save_path,idx,exp_map):
-        som_path = os.path.join(save_path,"som/")
-        if not os.path.exists(som_path):
-            os.makedirs(som_path)
-        self.objects,self.bg_objects,self.changed = removalOverlap(self.cfg_detection,self.objects,self.bg_objects,self.changed,self.size,self.min_bound)
-        # pcd_path = os.path.join(save_path,"pcd/")
-        # if not os.path.exists(pcd_path):
-        #     os.makedirs(pcd_path)
-        # draw_voxel_objects(self.objects,self.size,self.min_bound,self.resolution)
-        som_pth_step = som_path + str(idx) +"/"
-        if not os.path.exists(som_pth_step):
-            os.makedirs(som_pth_step)
-        relation_list,image_list,image_objects_dict,image_pair_dict,check_relation=prepareRelationForCOG(self.cfg_detection,self.objects,self.changed,som_pth_step,idx)
-        ####### get surrounding objects#####
-        surrounding_objects={}
-        for relation in relation_list :
-            if relation[0] in surrounding_objects.keys() :
-                surrounding_objects[relation[0]].append(relation[1])
-                surrounding_objects[relation[0]] = list(set(surrounding_objects[relation[0]]))
-            else :
-                surrounding_objects[relation[0]] = [relation[1]]
-            if relation[1] in surrounding_objects.keys() :
-                surrounding_objects[relation[1]].append(relation[0])
-                surrounding_objects[relation[1]] = list(set(surrounding_objects[relation[1]]))
-            else :
-                surrounding_objects[relation[1]] = [relation[0]]
-        self.changed=[]
-        obj_index=1
-        voxels_detection = torch.zeros(
-            1,self.size[0],self.size[0],self.size[2]
-            ).float().to(self.device)
-        wall=None
-        ####obj_index =1 indicates wall
-        for name,bg in self.bg_objects.items() :
-            if (name == "wall" or name == "wall-wood") and bg is not None :
-                indices_3=np.array(np.unravel_index(bg['voxel_index'], (self.size[0],self.size[0],self.size[2]),order='C')).T # n*3
-                indices_3 = torch.from_numpy(indices_3).to(self.device)
-                index =(indices_3 >torch.tensor([0,0,0]).to(self.device)) & (indices_3 < torch.tensor([self.size[0],self.size[0],self.size[2]]).to(self.device))
-                index_new = torch.where(index[:,0]&index[:,1]&index[:,2])[0]
-                voxels_detection[0,indices_3[index_new,1],indices_3[index_new,0],indices_3[index_new,2]] = obj_index  
-                wall = indices_3[index_new,:2].cpu().numpy()
-        obj_index +=1
-        for obj in self.objects :
-            indices_3=np.array(np.unravel_index(obj['voxel_index'],(self.size[0],self.size[0],self.size[2]),order='C')).T # n*3
-            indices_3 = torch.from_numpy(indices_3).to(self.device)
-            index =(indices_3 >torch.tensor([0,0,0]).to(self.device)) & (indices_3 < torch.tensor([self.size[0],self.size[0],self.size[2]]).to(self.device))
-            index_new = torch.where(index[:,0]&index[:,1]&index[:,2])[0]
-            voxels_detection[0,indices_3[index_new,1],indices_3[index_new,0],indices_3[index_new,2]] = obj_index  
-            obj_index +=1
-        min_h =self.min_bound[2]
-        min_z = int((0.3-min_h)/self.z_resolution)
-        mid_z = int((self.agent_height - min_h) / self.z_resolution )
-        agent_height_proj_detection = voxels_detection[..., min_z:mid_z].max(3)[0]
-        obstacle_map = agent_height_proj_detection[0]/ self.map_pred_threshold
-        outlier_region = torch.where(exp_map==0)
-        obstacle_map[outlier_region[0],outlier_region[1]]=-1
-        # return self.objects,None,obstacle_map.cpu().numpy()
-        # return self.objects,self.scene_graph,obstacle_map
-        return self.objects,self.bg_objects,None,obstacle_map,wall
     
     def get_point_cloud(self, depth_matrix):
 
@@ -416,7 +324,6 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         cam_coords = np.array((x, -y, z))
 
         # Filter cam coordinates according to agent view horizon
-        # cam_coords = cam_coords[:, np.where(cam_coords[2] <= 20)[0]]  # ???
 
         # Get camera points
         x, y, z = cam_coords
@@ -432,23 +339,13 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         occupancy_points[:, 1] += pos['y']
         occupancy_points[:, 2] += pos['z']
 
-        # filtered_occ_pts = np.array([pt for pt in occupancy_points if pt[2] <= 0 and pt[2] >= -Configuration.CAMERA_HEIGHT])
 
         # # Update map model occupancy points
-        # self.map_model.update_occupancy(filtered_occ_pts, pos, angle, file_name, collision)
         return occupancy_points.reshape(depth_matrix.shape[0],depth_matrix.shape[1],3)
     
     @torch.no_grad()
     def getGlobalMap(self,map_before,observations,idx,save_path,agent_locations):
-        # self.getPoint(observations["event"].depth_frame,last_action)
-        # sem_pcd_path = os.path.join(save_path,"sem_pcd/")
-        # object_path = os.path.join(save_path,"object/")
-        # if not os.path.exists(object_path):
-        #     os.makedirs(object_path)
-        # if not os.path.exists(sem_pcd_path):
-        #     os.makedirs(sem_pcd_path)
         event = observations["event"]
-        # perceptions = self.perceive(event)
         angle =(360 - event.metadata['agent']['rotation']['y']+90) % 360
         pos = {"x":  event.metadata['agent']['position']['x'], "y": event.metadata['agent']['position']['z'], "z": event.metadata['cameraPosition']['y']}
         self.agent_history[idx]={
@@ -461,33 +358,22 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         pcd.points = o3d.utility.Vector3dVector(world_view_t.reshape(-1,3))
         pcd.normals = o3d.utility.Vector3dVector(np.ones_like(world_view_t.reshape(-1,3)))
         pcd.colors = o3d.utility.Vector3dVector(event.frame.reshape(-1,3)/255)
-        # self.pcd +=pcd
         self.forward_detection(event.frame, world_view_t, idx ,save_path)
         # 
         #### save results
-        # o3d.io.write_point_cloud(os.path.join(pcd_path,str(idx)+".ply"), self.pcd)
         # results = {
         #         'objects': self.objects.to_serializable(),
         #         'bg_objects': MapObjectList([_ for _ in self.bg_objects.values() if _ is not None]).to_serializable(),
         #         # 'total_steps':idx,
-        #         # 'agent': event.metadata['agent']
         #     }
         # # with open(os.path.join(save_path,"sg/")+f"{str(idx)}.json", "wt", encoding="utf-8") as f:
-        # #     json.dump(results, f, indent=4) 
-        # open(object_path+str(idx)+".pkl.gz", 'wb').write(gzip.compress(pkl.dumps(results)))
         # results = {
-        #         # 'objects': self.objects.to_serializable(),
-        #         # 'bg_objects': MapObjectList([_ for _ in self.bg_objects.values() if _ is not None]).to_serializable(),
         #         # 'total_steps':idx,
         #         'agent': event.metadata['agent']
         #     }
-        # with open(os.path.join(save_path,"sg/")+f"{str(idx)}.json", "wt", encoding="utf-8") as f:
-        #     json.dump(results, f, indent=4) 
-        # open(os.path.join(save_path,"sg/")+f"{str(idx)}.pkl.gz", 'wb').write(gzip.compress(pkl.dumps(results)))
         #### save results
         self.updateObjectState(idx,save_path,agent_locations,pcd,event.depth_frame,event.frame)
         
-        # draw_pcd_objects(self.objects,self.bg_objects,shape=self.size,min_bound=self.min_bound,idx=idx,pcd_path=sem_pcd_path)
         return None,map_before,None,pcd
     def get_mask(self, mask_range):
         size = int(mask_range) * 2
@@ -533,25 +419,3 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         sorted_items = sorted(ratios.items(), key=lambda x: x[1], reverse=True)
         sorted_idx = [k for k, v in sorted_items]
         return sorted_idx[:3]
-    def compute_overlap_voxel(self,pcd1, pcd2, voxel_size=0.05):
-        # 体素化点云
-        pcd1_voxel = o3d.geometry.PointCloud.voxel_down_sample(pcd1, voxel_size)
-        pcd2_voxel = o3d.geometry.PointCloud.voxel_down_sample(pcd2, voxel_size)
-        
-        # 获取体素中心点
-        points1 = np.asarray(pcd1_voxel.points)
-        points2 = np.asarray(pcd2_voxel.points)
-        
-        # 构建KDTree加速搜索
-        from scipy.spatial import cKDTree
-        tree1 = cKDTree(points1)
-        tree2 = cKDTree(points2)
-        
-        # 查找重叠体素
-        overlap_indices1 = tree1.query_ball_tree(tree2, r=voxel_size * 0.6)
-        overlap_count = sum(len(indices) > 0 for indices in overlap_indices1)
-        
-        # 计算重叠率
-        overlap_ratio = overlap_count / min(len(points1), len(points2))
-        
-        return overlap_ratio

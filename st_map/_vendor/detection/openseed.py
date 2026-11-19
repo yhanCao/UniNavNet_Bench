@@ -1,5 +1,4 @@
 import os
-import sys
 
 from st_map.config import resource_path
 
@@ -12,7 +11,6 @@ from torchvision import transforms
 from tqdm import trange
 from st_map._vendor.utils.arguments import load_opt_command
 import pickle as pkl
-import gzip
 from detectron2.data import MetadataCatalog
 from detectron2.utils.colormap import random_color
 from st_map._vendor.openseed.BaseModel import BaseModel
@@ -32,7 +30,6 @@ def InitDetection(runtime_cfg=None):
     with open(resource_path('configs/panoptic_categories_nomerge.txt'), 'r') as file:
         for line in file:
                 thing_classes.append(line.strip())
-    # thing_classes = ['car','person','traffic light', 'truck', 'motorcycle']
     stuff_classes = []
     thing_colors = [random_color(rgb=True, maximum=255).astype(np.int32).tolist() for _ in range(len(thing_classes))]
     stuff_colors = [random_color(rgb=True, maximum=255).astype(np.int32).tolist() for _ in range(len(stuff_classes))]

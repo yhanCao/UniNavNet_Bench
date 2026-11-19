@@ -1,7 +1,6 @@
 import torch
 import copy
 from torch import nn, Tensor
-import os
 
 import math
 import torch.nn.functional as F
@@ -41,7 +40,6 @@ def gen_encoder_output_proposals(memory:Tensor, memory_padding_mask:Tensor, spat
         - output_proposals: bs, sum{hw}, 4
     """
     N_, S_, C_ = memory.shape
-    base_scale = 4.0
     proposals = []
     _cur = 0
     for lvl, (H_, W_) in enumerate(spatial_shapes):
@@ -72,8 +70,6 @@ def gen_encoder_output_proposals(memory:Tensor, memory_padding_mask:Tensor, spat
 
 
 def gen_sineembed_for_position(pos_tensor, dim=128):
-    # n_query, bs, _ = pos_tensor.size()
-    # sineembed_tensor = torch.zeros(n_query, bs, 256)
     scale = 2 * math.pi
     dim_t = torch.arange(dim, dtype=torch.float32, device=pos_tensor.device)
     dim_t = 10000 ** (2 * (dim_t // 2) / dim)

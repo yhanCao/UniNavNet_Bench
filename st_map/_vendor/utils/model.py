@@ -1,7 +1,4 @@
 import logging
-import os
-import time
-import pickle
 import torch
 from detectron2.utils.comm import is_main_process
 

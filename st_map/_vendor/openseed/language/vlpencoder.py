@@ -6,7 +6,6 @@
 # --------------------------------------------------------
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from timm.models.layers import trunc_normal_
 
@@ -124,20 +123,6 @@ class LanguageEncoder(nn.Module):
                 text_emb = torch.stack(clss_embeddings, dim=0)
                 setattr(self, '{}_text_embeddings'.format(name), text_emb)
 
-    def get_text_token_embeddings(self, txts, name='default', token=False, norm=False):
-        if not token:
-            tokens = self.tokenizer(
-                txts, padding='max_length', truncation=True, max_length=self.max_token_num, return_tensors='pt'
-            )
-            tokens = {key: value.cuda() for key, value in tokens.items()}
-        else:
-            tokens = txts
-        token_emb, class_emb = self.forward_language_token((tokens['input_ids'], tokens['attention_mask']), norm=norm)
-        ret = {"tokens": tokens,
-                "token_emb": token_emb,
-                "class_emb": class_emb,}
-        setattr(self, '{}_token_embeddings'.format(name), ret)
-        return ret
 
     def forward_language(self, texts, norm=True):
         x = self.lang_encoder(*texts)
@@ -153,23 +138,6 @@ class LanguageEncoder(nn.Module):
             x = x / (x.norm(dim=-1, keepdim=True) + 1e-7)
         return x
     
-    def forward_language_token(self, texts, norm=False):
-        x = self.lang_encoder(*texts)
-        token_x = x['last_hidden_state']
-
-        if self.tokenizer_type == 'clip':
-            class_x = token_x[torch.arange(token_x.size(0)), texts[0].argmax(dim=-1)]
-        else:
-            class_x = token_x[:, 0]
-
-        class_x = class_x @ self.lang_proj
-        token_x = token_x @ self.lang_proj
-
-        if norm:
-            class_x = class_x / (class_x.norm(dim=-1, keepdim=True) + 1e-7)
-            token_x = token_x / (token_x.norm(dim=-1, keepdim=True) + 1e-7)
-
-        return token_x, class_x
     
     def compute_similarity(self, v_emb, name='default', fake=False):
         if fake:

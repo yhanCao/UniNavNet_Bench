@@ -6,7 +6,7 @@
 # Modified from DINO https://github.com/IDEA-Research/DINO by Feng Li and Hao Zhang.
 # ------------------------------------------------------------------------
 
-from typing import Optional, List, Union
+from typing import Optional
 import torch
 from torch import nn, Tensor
 from torch.cuda.amp import autocast
@@ -173,7 +173,6 @@ class TransformerDecoder(nn.Module):
                 new_reference_points = outputs_unsig.sigmoid()
 
                 reference_points = new_reference_points.detach()
-                # if layer_id != self.num_layers - 1:
                 ref_points.append(new_reference_points)
 
             intermediate.append(self.norm(output))
@@ -223,10 +222,6 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self.key_aware_type = key_aware_type
         self.key_aware_proj = None
 
-    def rm_self_attn_modules(self):
-        self.self_attn = None
-        self.dropout2 = None
-        self.norm2 = None
 
     @staticmethod
     def with_pos_embed(tensor, pos):

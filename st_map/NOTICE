@@ -14,3 +14,7 @@ Swin Transformer, and TensorFlow-derived depth utilities. External dependencies
 and separately downloaded model weights retain their respective licenses.
 The parent checkout does not provide a separate upstream LICENSE file; this
 notice does not relicense third-party code or model weights.
+
+Code that never runs in UniNavBench was removed after packaging: unused modules (alternative OpenSeeD
+backbones and decoders, drawing and visualization helpers), functions and imports that no executed
+or referenced code reaches, and commented-out code. Comments were translated to English.

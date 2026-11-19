@@ -1,5 +1,4 @@
 import numpy as np
-from PIL import Image
 import open_clip
 class CLIPModel:
     def __init__(self,device,model_name="ViT-H-14",pretrained="laion2b_s32b_b79k"):
@@ -12,7 +11,6 @@ class CLIPModel:
         self.target_feat = None
     def compute_clip_features(self,image,results):
         
-        # padding = args.clip_padding  # Adjust the padding amount as needed
         padding = 20  # Adjust the padding amount as needed
         
         image_crops = []
@@ -62,24 +60,9 @@ class CLIPModel:
         results['image_feats'] = image_feats
         results['text_feats'] = text_feats  
         return results
-    def compute_cosine_text_similarity(self,texts,text2):
-        text1 = self.clip_tokenizer(texts).to(self.device)
-        text2 = self.clip_tokenizer([text2]).to(self.device)
-        text1_feat = self.clip_model.encode_text(text1)
-        text2_feat = self.clip_model.encode_text(text2)
-        text1_feat /= text1_feat.norm(dim=-1, keepdim=True)
-        text2_feat /= text2_feat.norm(dim=-1, keepdim=True)
-        similarity = (text1_feat @ text2_feat.T).max().item()
-        return similarity
     def target_feature(self,text):
         text = self.clip_tokenizer([text]).to(self.device)
         text2_feat = self.clip_model.encode_text(text)
         text2_feat /= text2_feat.norm(dim=-1, keepdim=True)
         self.target_feat= text2_feat
         return text2_feat
-    def compute_cosine_similarity(self,texts):
-        text1 = self.clip_tokenizer(texts).to(self.device)
-        text1_feat = self.clip_model.encode_text(text1)
-        text1_feat /= text1_feat.norm(dim=-1, keepdim=True)
-        similarity = (text1_feat @ self.target_feat.T).max().item()
-        return similarity

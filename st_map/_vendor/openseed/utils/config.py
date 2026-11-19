@@ -97,8 +97,7 @@ def _called_with_cfg(*args, **kwargs):
         bool: whether the arguments contain CfgNode and should be considered
             forwarded to from_config.
     """
-    from omegaconf import DictConfig, OmegaConf, ListConfig
-    # from detectron2.config import LazyConfig
+    from omegaconf import DictConfig
 
     if len(args) and (isinstance(args[0], (dict)) or (isinstance(args[0], (DictConfig)))):
         return True

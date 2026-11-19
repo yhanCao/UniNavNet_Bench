@@ -190,7 +190,6 @@ class TemporalMemoryMixin:
                 depth_at_uv = depth_buffer[v_valid, u_valid]
                 visible = np.where(z_valid <= (depth_at_uv + 0.01))[0]  # Allow slight tolerance (+1.0)
                 # Update mask with object ID where visible
-                # mask[v_valid[visible], u_valid[visible]] = i  # Assign object index
                 if len(visible) > 0:
                     ratio = len(np.where((depth_at_uv[visible]-z_valid[visible])>0.1)[0])/len(visible)
                     visible_length[i] = len(visible)
@@ -199,14 +198,6 @@ class TemporalMemoryMixin:
                     conflict = np.where((depth_at_uv[visible]-z_valid[visible])>0.1)[0]
                     conflict_uv[i] = (u_valid[visible][conflict], v_valid[visible][conflict])
                 # Optional: Compute depth ratios for further analysis
-                # if index[index_buffer].shape[0] > 0:
-                #     mask1 = np.zeros((self.screen_h,self.screen_w), dtype=np.uint8)
-                #     mask1[v[index][index_buffer],u[index][index_buffer]] = 1
-                #     ratios[i] = len(np.where(mask1))
-                #     closed_mask = cv2.morphologyEx(mask1, cv2.MORPH_CLOSE, kernel)
-                #     ratios[i] = len(np.where(closed_mask!=0)[0])
-                #     depth_buffer[np.where(closed_mask!=0)[0],np.where(closed_mask!=0)[1]] = np.mean(z[index][index_buffer])
-                #     mask[np.where(closed_mask!=0)[0],np.where(closed_mask!=0)[1]] = i   #### 在其中的object
         not_in_objects = list(set(np.arange(len(self.objects)))-set(list(visible_length.keys())))
         for i in not_in_objects :
             # objects merged with a detection at this step already have state 1
@@ -219,14 +210,12 @@ class TemporalMemoryMixin:
                     if value > getattr(self,'min_visible_points',100):
                         # state 2 needs both geometric conflict and appearance mismatch
                         if ratios[key] > 0.2 and self.appearanceMismatch(self.objects[key],conflict_uv[key],rgb):
-                            # print("object:",self.objects[key]['class_name'],"idx:",idx,ratios[key] > 0.2)
                             self.objects[key]['state_dict'][idx] = 2
                             missing.append(key)
                         else :
                             self.objects[key]['state_dict'][idx] = 1
                     else:
                         self.objects[key]['state_dict'][idx] = 0
-                    # print("step:",idx,"object id:",unique_elements[i],"object type:",most_common_element(self.objects[unique_elements[i]]['class_name']),"overlap ratio with pcd:",ratio,"projection ratio in image",ratios[unique_elements[i]],"state:",self.objects[unique_elements[i]]['state_dict'][idx])
                 self.updateStateSegment(self.objects[key],idx)
         self.archiveObjects(missing,idx)
         self.trimMemory(idx,save_path)

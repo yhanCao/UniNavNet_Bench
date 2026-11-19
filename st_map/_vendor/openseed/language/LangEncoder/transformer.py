@@ -1,11 +1,8 @@
 from collections import OrderedDict
-from typing import Tuple, Union
 import logging
 import os
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from timm.models.layers import DropPath, trunc_normal_
@@ -111,7 +108,6 @@ class Transformer(nn.Module):
         self.ln_final = LayerNorm(width)
 
         trunc_normal_(self.positional_embedding, std=.02)
-        # nn.init.normal_(self.token_embedding, std=.02)
         trunc_normal_(self.token_embedding.weight, std=.02)
         self.apply(self._init_weights)
 
@@ -193,7 +189,6 @@ class Transformer(nn.Module):
 
     def forward(self, input_ids, attention_mask=None):
         key_padding_mask = (attention_mask == 0) if (not self.autogressive and attention_mask is not None) else None
-        # key_padding_mask = (input_ids == 0) if not self.autogressive else None
         x = self.token_embedding(input_ids)  # [batch_size, n_ctx, d_model]
         x = x + self.positional_embedding
         x = x.permute(1, 0, 2)  # NLD -> LND

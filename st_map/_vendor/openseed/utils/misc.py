@@ -63,7 +63,6 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
         # TODO make it support different-sized images
         max_size = _max_by_axis([list(img.shape) for img in tensor_list])
-        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
         batch_shape = [len(tensor_list)] + max_size
         b, c, h, w = batch_shape
         dtype = tensor_list[0].dtype
@@ -81,7 +80,6 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
         # TODO make it support different-sized images
         max_size = _max_by_axis([list(txt.shape) for txt in tensor_list])
-        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
         batch_shape = [len(tensor_list)] + max_size
         b, c, l = batch_shape
         dtype = tensor_list[0].dtype
@@ -95,36 +93,6 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
         raise ValueError("not supported")
     return NestedTensor(tensor, mask)
 
-def _collate_and_pad_divisibility(tensor_list: list, div=32):
-    max_size = []
-    for i in range(tensor_list[0].dim()):
-        max_size_i = torch.max(
-            torch.tensor([img.shape[i] for img in tensor_list]).to(torch.float32)
-        ).to(torch.int64)
-        max_size.append(max_size_i)
-    max_size = tuple(max_size)
-
-    c,h,w = max_size
-    pad_h = (div - h % div) if h % div != 0 else 0
-    pad_w = (div - w % div) if w % div != 0 else 0
-    max_size = (c,h+pad_h,w+pad_w)
-    
-    # work around for
-    # pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-    # m[: img.shape[1], :img.shape[2]] = False
-    # which is not yet supported in onnx
-    padded_imgs = []
-    padded_masks = []
-    for img in tensor_list:
-        padding = [(s1 - s2) for s1, s2 in zip(max_size, tuple(img.shape))]
-        padded_img = torch.nn.functional.pad(img, (0, padding[2], 0, padding[1], 0, padding[0]))
-        padded_imgs.append(padded_img)
-
-        m = torch.zeros_like(img[0], dtype=torch.int, device=img.device)
-        padded_mask = torch.nn.functional.pad(m, (0, padding[2], 0, padding[1]), "constant", 1)
-        padded_masks.append(padded_mask.to(torch.bool))
-    
-    return padded_imgs
 
 # _onnx_nested_tensor_from_tensor_list() is an implementation of
 # nested_tensor_from_tensor_list() that is supported by ONNX tracing.
@@ -139,8 +107,6 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTen
     max_size = tuple(max_size)
 
     # work around for
-    # pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-    # m[: img.shape[1], :img.shape[2]] = False
     # which is not yet supported in onnx
     padded_imgs = []
     padded_masks = []
@@ -230,34 +196,17 @@ def get_class_names(name, background=True):
     return class_names
 
 # TODO: add background to 
-# def get_class_names(name):
-#     if name is None:
-#         return None
 #     elif 'refcoco' in name:
-#         return ["background"]
 #     elif 'coco' in name:
-#         return COCO_PANOPTIC_CLASSES + ["background"]
 #     elif 'ade20k_full' in name:
-#         return ADE20K_847 + ["background"]
 #     elif 'ade' in name:
-#         return ADE_PANOPTIC_CLASSES + ["background"]
 #     elif 'scannet_41' in name:
-#         return SCAN_40
 #     elif 'scannet_21' in name:
-#         return SCAN_20
 #     elif 'sun' in name:
-#         return SUN_RGBD_37
 #     elif name == 'cityscapes_fine_sem_seg_val':
-#         return CITYSCAPES + ["background"]
 #     elif name == 'cityscapes_fine_instance_seg_val':
-#         return CITYSCAPES_THING + ["background"]
 #     elif name in ['cityscapes_fine_panoptic_val']:
-#         return CITYSCAPES + ["background"]
 #     elif name == 'bdd10k_val_sem_seg':
-#         return BDD_SEM + ["background"]
 #     elif name == 'bdd10k_40_panoptic_val':
-#         return BDD_PANO + ["background"]
 #     elif 'vlp' in name:
-#         return ["background"]
 #     else:
-#         assert False, "text dataset name {} is not defined".format(name)

@@ -11,7 +11,6 @@ Modules to compute the matching cost and solve the corresponding LSAP.
 """
 import torch
 import torch.nn.functional as F
-import numpy as np
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 from torch.cuda.amp import autocast
@@ -134,7 +133,6 @@ class HungarianMatcher(nn.Module):
             # Compute the classification cost. Contrary to the loss, we don't use the NLL,
             # but approximate it in 1 - proba[target class].
             # The 1 is a constant that doesn't change the matching, it can be ommitted.
-            # cost_class = -out_prob[:, tgt_ids]
             if 'mask' in cost:
                 out_mask = outputs["pred_masks"][b]  # [num_queries, H_pred, W_pred]
                 # gt masks are already padded when preparing target

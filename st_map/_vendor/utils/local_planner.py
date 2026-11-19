@@ -1,38 +1,33 @@
-from ai2thor.controller import Controller
 import networkx as nx
 from math import sqrt
 import math
 import os
 import matplotlib.pyplot as plt
-import heapq
 import numpy as np
-from PIL import Image
 from scipy.spatial import cKDTree
 def Select_now_index(m_coords,n_coords):
-    # 容差距离（欧几里得距离）
+    # tolerance (Euclidean distance)
     tolerance = 1e-5
 
-    # 建立 m_coords 的 KDTree
+    # KD-tree of m_coords
     tree = cKDTree(m_coords)
 
-    # 查询 n_coords 中每个点在 m_coords 中的近邻（容差范围内）
+    # neighbors in m_coords of every n_coords point, within the tolerance
     matched_pairs = []
     for j,point in enumerate(n_coords):
         indices = tree.query_ball_point(point, r=tolerance)
         for i in indices:
             matched_pairs.append((i, j)) 
 
-    # 排序（按 m_index 排序，保持一致性）
+    # sort by m_index for a stable order
     matched_pairs.sort()
 
-    # 拆开为两个数组（如果你需要）
+    # split into two arrays
     m_indices = np.array([i for i, _ in matched_pairs])
     n_indices = np.array([j for _, j in matched_pairs])
 
     
     return m_indices,n_indices
-def euclidean(u, v):
-    return math.hypot(u[0] - v[0], u[1] - v[1])
 
 def line_of_sight(G, u, v, obstacles=None):
     """
@@ -65,51 +60,12 @@ def line_of_sight(G, u, v, obstacles=None):
 
     return True
 
-def theta_star(G, start, goal, heuristic=euclidean):
-    open_list = []
-    heapq.heappush(open_list, (0, start))
-    came_from = {start: start}
-    g_score = {start: 0}
-
-    obstacles = set(G.nodes) - set(G.nodes())
-
-    while open_list:
-        _, current = heapq.heappop(open_list)
-
-        if current == goal:
-            break
-
-        for neighbor in G.neighbors(current):
-            if line_of_sight(G, came_from[current], neighbor, obstacles):
-                parent = came_from[current]
-                cost = g_score[parent] + heuristic(parent, neighbor)
-            else:
-                parent = current
-                cost = g_score[current] + heuristic(current, neighbor)
-
-            if neighbor not in g_score or cost < g_score[neighbor]:
-                came_from[neighbor] = parent
-                g_score[neighbor] = cost
-                f = cost + heuristic(neighbor, goal)
-                heapq.heappush(open_list, (f, neighbor))
-
-    # Reconstruct path
-    path = []
-    node = goal
-    if node not in came_from:
-        return []  # No path
-    while node != start:
-        path.append(node)
-        node = came_from[node]
-    path.append(start)
-    path.reverse()
-    return path
 def euclidean_heuristic(u, v, pos_dict):
-    """欧几里得距离启发式函数"""
+    """Euclidean distance heuristic."""
     pos1 = pos_dict[u]
     pos2 = pos_dict[v]
     return sqrt((pos1[0]-pos2[0])**2 + (pos1[2]-pos2[2])**2)
-# 计算两个位置之间的欧几里得距离
+# Euclidean distance between two positions
 def euclidean_distance(pos1, pos2):
     if isinstance(pos1, tuple) :
         return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[2] - pos2[2])**2)
@@ -224,14 +180,6 @@ class Local_Planner:
         else:
             self.current_direction = 0 if dz > 0 else 180
 
-    def _get_direction(self, u, v):
-        """Helper for direction calculation."""
-        dx = self.pos_dict[v][0] - self.pos_dict[u][0]
-        dz = self.pos_dict[v][2] - self.pos_dict[u][2]
-        if abs(dx) > abs(dz):
-            return 90 if dx > 0 else 270
-        else:
-            return 0 if dz > 0 else 180
 
     def path_to_actions(self, path, initial_rotation):
         """Convert path to actions with robust rotations."""
@@ -281,32 +229,30 @@ class Local_Planner:
             self.graph.add_node(i,pos = (pos['x'], pos['y'], pos['z']))
         for i, pos1 in enumerate(reachable_positions):
             for j, pos2 in enumerate(reachable_positions):
-                if i != j and euclidean_distance(pos1, pos2) <= 0.26:  # 设置相邻阈值
+                if i != j and euclidean_distance(pos1, pos2) <= 0.26:  # adjacency threshold
                     self.graph.add_edge(i,j,weight=euclidean_distance(pos1, pos2))
 
     def get_farthest_node_from_point(self, point,pose):
-        # 从图中获取节点坐标属性: node -> (x, y)
+        # node positions: node -> (x, y)
         pos_dict = nx.get_node_attributes(self.graph, 'pos')
         goal = (pose[0],0.9,pose[1])
-        # 定义欧几里得距离函数
+        # Euclidean distance
         def euclidean_dist(p1, p2):
             return math.dist(p1, p2)
         
-        # 1. 找到与给定坐标最近的节点
-        #    假设图中所有节点都有 pos 属性
+        # 1. node nearest to the given coordinates
+        #    (every node has a pos attribute)
         closest_node = min(
             pos_dict.keys(),
             key=lambda node: euclidean_dist(pos_dict[node], point)
         )
         
-        # 2. 计算从这个最近节点到图中所有节点的最短路径距离
-        #    注意要用 weight='weight'（你的图里边的属性名）
+        # 2. shortest-path distances from it to all nodes
+        #    using the edge attribute 'weight'
         # dist_dict = nx.single_source_dijkstra_path_length(
-        #     self.graph, source=closest_node, weight='weight'
         # )
         
-        # # 3. 找到最远的节点
-        # farthest_node = max(dist_dict, key=dist_dict.get)
+        # # 3. the farthest node
         goal_node = min(
             pos_dict.keys(),
             key=lambda node: euclidean_dist(pos_dict[node], goal)
@@ -319,7 +265,7 @@ class Local_Planner:
         urz = [p["z"] for i,p in enumerate(self.reachable_positions) if i in unexplored_node]
         rx1 = [self.pos_dict[p][0] for p in path]
         rz1 = [self.pos_dict[p][2] for p in path]
-        # 转化为动作序列
+        # path to actions
         plt.figure(figsize=(20,20))
         plt.scatter(erx, erz, c='blue', marker='s', s=30, label='Reachable')
         plt.scatter(urx, urz, c='orange', marker='s', s=30, label='Unreachable')
@@ -330,59 +276,57 @@ class Local_Planner:
         plt.ylabel("Z")
         plt.title("Paths in RoboThor")
         plt.legend(loc='upper left')
-        plt.axis("equal")  # 保持等比例
+        plt.axis("equal")  # equal axis scale
         plt.savefig(plt_pth+str(idx)+".png")
         plt.close()
     def rotation_to_goal(self,point_cloud,current_rotation,current_position,agent_height,fov,current_pitch):
         repitch = 0
         actions = []
-        # 计算目标物体的中心点
+        # center of the target object
         center = np.mean(point_cloud, axis=0)
         min_y = np.min(point_cloud,axis=0)[2]
         max_y = np.max(point_cloud,axis=0)[2]
-        # 计算目标物体相对于机器人的水平方向角度
+        # horizontal angle of the target relative to the agent
         dx = center[0] - current_position['x']
         dz = center[1] - current_position['z']
-        angle_rad = math.atan2(dx, dz)  # 注意x,z的顺序决定了角度的定义
+        angle_rad = math.atan2(dx, dz)  # the order of x and z defines the angle convention
         target_rotation = (math.degrees(angle_rad))
         while current_rotation < target_rotation-self.rotateStepDegrees/2 or current_rotation > target_rotation+self.rotateStepDegrees/2:
-            # print("current_rotation:",current_rotation,"target_rotation:",target_rotation)
-            # 计算旋转差值 (顺时针 or 逆时针)
             diff = (target_rotation - current_rotation + 360) % 360
 
-            # 如果差值为 0，说明已经对准朝向
+            # difference 0: already facing the target
             if diff > -self.rotateStepDegrees and diff < self.rotateStepDegrees :
                 break
 
-            # 如果差值 <= 180，则顺时针转(右转)比较近，否则逆时针(左转)比较近
+            # difference <= 180: turning clockwise (right) is shorter, otherwise counter-clockwise (left)
             if diff <= 180:
-                # 顺时针 30°
+                # clockwise
                 actions.append("RotateRight")
                 current_rotation = (current_rotation + self.rotateStepDegrees) % 360
             else:
-                # 逆时针 30°
+                # counter-clockwise
                 actions.append("RotateLeft")
                 current_rotation = (current_rotation - self.rotateStepDegrees) % 360
         if min_y < agent_height :
-            dy = min_y - agent_height # y 是高度
+            dy = min_y - agent_height # y is the height
         elif max_y > agent_height :
             dy = max_y - agent_height
         else :
             dy = center[2] - agent_height
-        distance_2d = math.sqrt(dx**2 + dz**2)  # 水平距离
+        distance_2d = math.sqrt(dx**2 + dz**2)  # horizontal distance
         pitch_rad = math.atan2(dy, distance_2d)
         target_pitch = math.degrees(pitch_rad)
 
-        # 检查是否需要调整俯仰角（上下看）
-        pitch_threshold = 30  # 视野范围的一半
+        # whether the camera pitch has to change (look up / down)
+        pitch_threshold = 30  # half the vertical field of view
         if target_pitch <  -pitch_threshold:
             while target_pitch < -pitch_threshold:
-                actions.append("LookDown")  # 物体在视野上方，向上看
+                actions.append("LookDown")  # object below the view: look down
                 target_pitch += 30
                 repitch +=1
         elif target_pitch >  + pitch_threshold:
             while target_pitch >  + pitch_threshold:
-                actions.append("LookUp")  # 物体在视野下方，向下看
+                actions.append("LookUp")  # object above the view: look up
                 target_pitch -= 30
                 repitch -= 1
         actions.append("Stop")

@@ -91,22 +91,22 @@ def get_top_down_frame(controller):
 def world_2_top_down_view(world_point, cam_pos, fov, img_size=(512, 512)):
     fov_rad = np.radians(fov)
     aspect_ratio = img_size[0] / img_size[1]
-    f = 1.0 / np.tan(fov_rad / 2)  # 焦距
+    f = 1.0 / np.tan(fov_rad / 2)  # focal length
 
-    # 2. 世界坐标 → 相机坐标（假设相机朝向 Z 轴正方向）
-    # 相机坐标系：X 向右，Y 向下，Z 向前
+    # 2. world -> camera coordinates (camera looking along +Z)
+    # camera frame: X right, Y down, Z forward
     x_cam = world_point[0] - cam_pos[0]
     y_cam = world_point[2] - cam_pos[2]
-    z_cam = -cam_pos[1]  # 相机高度（Y 轴向下）
+    z_cam = -cam_pos[1]  # camera height (Y points down)
 
-    # 3. 透视投影（标准化设备坐标 NDC）
-    # 注意：这里假设相机朝 Z 正方向，且 Y 轴向下
+    # 3. perspective projection (normalized device coordinates)
+    # assumes the camera looks along +Z with Y pointing down
     x_ndc = (x_cam * f) / (z_cam * aspect_ratio)
     y_ndc = (y_cam * f) / z_cam
 
-    # 4. NDC → 像素坐标
+    # 4. NDC -> pixel coordinates
     pixel_x = int((x_ndc + 1) * 0.5 * img_size[0])
-    pixel_y = int((1 - y_ndc) * 0.5 * img_size[1])  # Y 轴翻转（图像坐标系）
+    pixel_y = int((1 - y_ndc) * 0.5 * img_size[1])  # flip Y (image coordinates)
 
     return [img_size[0]-pixel_x, img_size[1]-pixel_y]
 def draw_top_down_frame(controller,save_path,idx,target_objects):
@@ -127,13 +127,3 @@ def draw_top_down_frame(controller,save_path,idx,target_objects):
     if not os.path.exists(target_path):
         os.makedirs(target_path)
     image.save(os.path.join(target_path,str(idx)+".png"))
-def get_Tracable_Obj(objects,target_object):
-    for obj in objects:
-        if obj['id'] != target_object:
-            if 'children' in obj :
-                for child in obj['children']:
-                    if child['id'] == target_object:
-                        return obj
-        else:
-            return obj
-        

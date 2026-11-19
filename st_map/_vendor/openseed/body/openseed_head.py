@@ -4,13 +4,11 @@
 # ------------------------------------------------------------------------
 # Modified from Mask2Former https://github.com/facebookresearch/Mask2Former by Feng Li and Hao Zhang.
 # ------------------------------------------------------------------------------
-import logging
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict
 
 from torch import nn
 
-from detectron2.layers import Conv2d, ShapeSpec, get_norm
-from detectron2.modeling import SEM_SEG_HEADS_REGISTRY
+from detectron2.layers import ShapeSpec
 
 from .registry import register_body
 from .encoder import build_encoder
@@ -55,7 +53,7 @@ class OpenSeeDHead(nn.Module):
     @classmethod
     def from_config(cls, cfg, input_shape: Dict[str, ShapeSpec], lang_encoder: nn.Module, extra: dict):
         enc_cfg = cfg['MODEL']['ENCODER']
-        dec_cfg = cfg['MODEL']['DECODER']
+        cfg['MODEL']['DECODER']
         transformer_predictor_in_channels = enc_cfg['CONVS_DIM']
 
         return {

@@ -1,21 +1,17 @@
 from collections import Counter
-import copy
 import json
 import cv2
-import os
 import numpy as np
 from omegaconf import DictConfig
 import open3d as o3d
 import torch
-import time
 import torch.nn.functional as F
 
-# import faiss
 
-from st_map._vendor.utils.general_utils import to_tensor, to_numpy, Timer
+from st_map._vendor.utils.general_utils import to_tensor
 from st_map._vendor.slam.slam_classes import MapObjectList, DetectionList
 
-from st_map._vendor.utils.ious import compute_3d_iou, compute_3d_iou_accuracte_batch, mask_subtract_contained, compute_iou_batch,compute_3d_distance,compute_3d_distancereplica
+from st_map._vendor.utils.ious import compute_3d_iou, compute_3d_iou_accuracte_batch, mask_subtract_contained, compute_iou_batch, compute_3d_distancereplica
 def to_scalar(d):
     '''
     Convert the d to a scalar
@@ -115,7 +111,6 @@ def mapPcdToVoxel(points,voxel_size,shape,minbound):
     voxel_index_1D=voxel_index_3D[index_real,0]*shape[1]*shape[2]+voxel_index_3D[index_real,1]*shape[2]+voxel_index_3D[index_real,2]#(n)
     voxel_index_1D = voxel_index_1D.astype(np.int32)
     voxel_index = np.unique(voxel_index_1D)
-    # print("mapPcdToVoxel:",voxel_size,shape,minbound)
     return voxel_index
 def selectPointsFromVoxel(object,voxel_size,shape,minbound):
     voxel_index_3D=np.floor((np.array(object['pcd'].points)-np.array(minbound))/voxel_size)
@@ -125,7 +120,6 @@ def selectPointsFromVoxel(object,voxel_size,shape,minbound):
     voxel_index_1D = voxel_index_1D.astype(np.int32)
     mask = np.isin(voxel_index_1D, object['voxel_index'])
     indices = index_real[np.where(mask)[0]]
-    # print("selectPointsFromVoxel:",voxel_size,shape,minbound)
     return np.array(object['pcd'].points)[indices]
 def selectPcdFromVoxel(object,voxel_size,shape,minbound):
     voxel_index_3D=np.floor((np.array(object['pcd'].points)-np.array(minbound))/voxel_size)
@@ -137,20 +131,10 @@ def selectPcdFromVoxel(object,voxel_size,shape,minbound):
     indices = index_real[np.where(mask)[0]]
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(np.array(object['pcd'].points)[indices])
-    # pcd.normals = o3d.utility.Vector3dVector(np.array(object['pcd'].normals)[indices])
-    # pcd.colors = o3d.utility.Vector3dVector(np.array(object['pcd'].colors)[indices])
     return pcd
-# def process_pcd(pcd, cfg, run_dbscan=True):
     
-#     pcd = pcd.voxel_down_sample(voxel_size=cfg.downsample_voxel_size)
         
-#     if cfg.dbscan_remove_noise and run_dbscan:
-#         # print("Before dbscan:", len(pcd.points))
-#         print(cfg.dbscan_eps)
-#         pcd = pcd_denoise_dbscan(pcd, cfg)
-#         # print("After dbscan:", len(pcd.points))
         
-#     return pcd
 def get_classes_colors(classes):
     class_colors = {}
 
@@ -199,9 +183,6 @@ def create_object_pcd_from_pcd(pcd_array, image, mask, obj_color=None) -> o3d.ge
         # Use the assigned obj_color for all points
         colors = np.full(pcd_array.shape, obj_color)
 
-    # if pcd_array.shape[0] == 0:
-    #     import pdb;
-    #     pdb.set_trace()
 
     # Create an Open3D PointCloud object
     pcd = o3d.geometry.PointCloud()
@@ -261,15 +242,11 @@ def remove_outlierone(cfg,voxel_index,shape,minbound,size,run_dbscan = False):
     voxel = o3d.geometry.PointCloud()
     coordinates= extractVoxelCenterfromVoxelmap(voxel_index,shape,minbound,size)
     voxel.points=o3d.utility.Vector3dVector(coordinates)
-    # cl, ind = voxel.remove_statistical_outlier(nb_neighbors=100, std_ratio=0.5)
-    # # 提取去除离群点后的点云
-    # inlier_cloud = voxel.select_by_index(ind)
+    # # points without outliers
     if run_dbscan :
         voxel_new = pcd_denoise_dbscan1(voxel,cfg)
     else : 
         voxel_new = None
-    # cl, ind = voxel.remove_statistical_outlier(nb_neighbors=10, std_ratio=2)
-    # inlier_cloud = voxel.select_by_index(ind)
     
     if voxel_new != None :
         return mapPcdToVoxel(np.array(voxel_new.points),size,shape,minbound)
@@ -278,27 +255,14 @@ def remove_outlierone(cfg,voxel_index,shape,minbound,size,run_dbscan = False):
 def remove_outlier(cfg,objects:MapObjectList,shape,minbound,voxel_size):
     deleted=[]
     for i in range(len(objects)):
-        # pcd = objects[i]['pcd']
-        # # 使用统计滤波去除离群点
-        # cl, ind = pcd.remove_statistical_outlier(nb_neighbors=100, std_ratio=0.5)
-        # # 提取去除离群点后的点云
-        # inlier_cloud = pcd.select_by_index(ind)
-        # objects[i]['pcd'] = inlier_cloud
-        ## 显示原始点云和去除离群点后的点云
-        # print("Showing original point cloud...")
-        # o3d.visualization.draw_geometries([pcd], window_name="Original Point Cloud")
-        # print("Showing point cloud with outliers removed...")
-        # o3d.visualization.draw_geometries([inlier_cloud], window_name="Inliers Point Cloud")
+        # # statistical outlier removal
+        # # points without outliers
+        ## show the point cloud before and after outlier removal
         voxel = o3d.geometry.PointCloud()
         coordinates = extractVoxelCenterfromVoxelmap(objects[i]['voxel_index'],shape=shape,minbound=minbound,size = voxel_size)
         voxel.points=o3d.utility.Vector3dVector(coordinates)
         o3d.visualization.draw_geometries([voxel])
-        # cl, ind = voxel.remove_statistical_outlier(nb_neighbors=100, std_ratio=0.5)
-        # # 提取去除离群点后的点云
-        # inlier_cloud = voxel.select_by_index(ind)
-        # if len(np.array(inlier_cloud.points)) < 5 :
-        #     deleted.append(i)
-        #     continue
+        # # points without outliers
         # else :
         voxel = pcd_denoise_dbscan1(voxel,cfg)
         if voxel != None :
@@ -309,20 +273,19 @@ def remove_outlier(cfg,objects:MapObjectList,shape,minbound,voxel_size):
     objects = MapObjectList(new_objects)
     return objects
 def pcd_denoise_dbscan1(pcd: o3d.geometry.PointCloud, cfg) -> o3d.geometry.PointCloud:
-    # start = time.time()
-    pcd = pcd.voxel_down_sample(voxel_size=0.02)  # 先下采样
+    pcd = pcd.voxel_down_sample(voxel_size=0.02)  # downsample first
     labels = np.array(pcd.cluster_dbscan(eps=cfg.dbscan_eps, min_points=cfg.dbscan_min_points, print_progress=False))
 
-    # 统计聚类数量（忽略 -1）
+    # number of clusters (ignoring noise, -1)
     valid_labels = labels[labels >= 0]
     if len(valid_labels) == 0:
         return pcd
 
-    # 找到最大聚类的 label
+    # label of the largest cluster
     unique, counts = np.unique(valid_labels, return_counts=True)
     largest_cluster_label = unique[np.argmax(counts)]
 
-    # 提取最大聚类点
+    # points of the largest cluster
     indices = np.where(labels == largest_cluster_label)[0]
     pcd_largest_cluster = pcd.select_by_index(indices)
 
@@ -330,11 +293,7 @@ def pcd_denoise_dbscan1(pcd: o3d.geometry.PointCloud, cfg) -> o3d.geometry.Point
     return pcd_largest_cluster
 def pcd_denoise_dbscan(pcd: o3d.geometry.PointCloud, cfg) -> o3d.geometry.PointCloud:
     ### Remove noise via clustering
-    # print("before")
-    # o3d.visualization.draw_geometries([pcd])
     pcd = pcd.voxel_down_sample(voxel_size=0.02)
-    # cl, ind = pcd.remove_radius_outlier(nb_points=5, radius=0.1)
-    # pcd = pcd.select_by_index(ind)
     pcd_clusters = pcd.cluster_dbscan(
         eps=cfg.dbscan_eps,
         min_points=cfg.dbscan_min_points,
@@ -342,7 +301,6 @@ def pcd_denoise_dbscan(pcd: o3d.geometry.PointCloud, cfg) -> o3d.geometry.PointC
     # Convert to numpy arrays
     obj_points = np.asarray(pcd.points)
 
-    # obj_colors = np.asarray(pcd.colors)
     pcd_clusters = np.array(pcd_clusters)
 
     # Count all labels in the cluster
@@ -361,22 +319,16 @@ def pcd_denoise_dbscan(pcd: o3d.geometry.PointCloud, cfg) -> o3d.geometry.PointC
 
         # Apply mask
         largest_cluster_points = obj_points[largest_mask]
-        # largest_cluster_colors = obj_colors[largest_mask]
         
         # If the largest cluster is too small, return the original point cloud
         if len(largest_cluster_points) < 5:
-            # print("after len < 5")
-            # o3d.visualization.draw_geometries([pcd])
             return None
 
         # Create a new PointCloud object
         largest_cluster_pcd = o3d.geometry.PointCloud()
         largest_cluster_pcd.points = o3d.utility.Vector3dVector(largest_cluster_points)
-        # largest_cluster_pcd.colors = o3d.utility.Vector3dVector(largest_cluster_colors)
         
         pcd = largest_cluster_pcd
-        # print("after")
-        # o3d.visualization.draw_geometries([pcd])
         return pcd
     else :
         return pcd
@@ -405,13 +357,10 @@ def process_pcd(pcd, cfg, run_dbscan=True):
     # sg.yaml's downsample_voxel_size (2 cm); a hard-coded 5 mm grew large objects to millions of points
     pcd = pcd.voxel_down_sample(voxel_size=cfg.downsample_voxel_size)
         
-    # if cfg.dbscan_remove_noise and run_dbscan:
-    # print("Before dbscan:", len(pcd.points))
     # pcd = pcd_denoise_dbscan(
     #     pcd, 
     #     cfg
     # )
-    # print("After dbscan:", len(pcd.points))
         
     return pcd
 
@@ -444,7 +393,6 @@ def merge_obj2_into_obj1_2(cfg, obj1, obj2, run_dbscan=True):
                 obj1[k] = obj1[k] # Keep the initial instance color
             # else:
             #     # TODO: handle other types if needed in the future
-            #     raise NotImplementedError
         else: # pcd, bbox, clip_ft, text_ft are handled below
             continue
 
@@ -500,18 +448,12 @@ def merge_obj2_into_obj1(cfg, obj1, obj2,shape,minbound,voxel_size, run_dbscan=F
             continue
 
     # merge pcd and bbox
-    # if 'pcd' in obj1.keys() and 'pcd' in obj2.keys() :
-        # print("before merge",np.array(obj1['pcd'].points).shape[0])
     
-        # print("after merge",np.array(obj1['pcd'].points).shape[0])
-    # obj1['pcd'] = process_pcd(obj1['pcd'], cfg, run_dbscan=run_dbscan)
 
     obj1['voxel_index'] = remove_outlierone(cfg,np.hstack((obj1['voxel_index'],obj2['voxel_index'])),shape,minbound,size = voxel_size,run_dbscan = run_dbscan)
     if 'pcd' in obj1.keys() and 'pcd' in obj2.keys() :
         obj1['pcd'] = (obj1['pcd']+obj2['pcd']).voxel_down_sample(cfg.downsample_voxel_size)
         obj1['pcd']=selectPcdFromVoxel(obj1,voxel_size,shape,minbound)
-    # obj1['voxel_index'] = np.unique(np.hstack((obj1['voxel_index'],obj2['voxel_index'])))
-    # if 'pcd' in obj1.keys() and 'pcd' in obj2.keys() :
         obj1['bbox'] = get_bounding_box(cfg, obj1['pcd'])
         obj1['bbox'].color = [0,1,0]
         
@@ -552,8 +494,6 @@ def compute_relationship_matrix(objects: MapObjectList):
                 box_j = objects[j]['voxel_index']
                 common_elements = np.intersect1d(box_i, box_j)
                 # if len(common_elements) 
-                # # Skip if the boxes do not overlap at all (saves computation)
-                # iou = compute_3d_iou(box_i, box_j)
                 if len(common_elements)  == 0:
                     distance=np.linalg.norm(np.mean(np.array(objects[i]['pcd'].points),axis=0) - np.mean(np.array(objects[j]['pcd'].points),axis=0))
                     if distance <2 and len(objects[i]['pcd'].points) > 200 and len(objects[j]['pcd'].points) > 200:
@@ -618,15 +558,11 @@ def compute_overlap_matrix(cfg, objects: MapObjectList):
                 continue
             overlap1,overlap2 = calculate_pcd_overlap(torch.from_numpy(np.asarray(objects[i]['pcd'].points, dtype=np.float32)).cuda(),torch.tensor(np.asarray(objects[j]['pcd'].points, dtype=np.float32)).cuda(),batch_size=cfg.cal_batch_size,threshold=cfg.downsample_voxel_size)
             # # # If any points are found within the threshold, increase overlap count
-            # # overlap += sum([len(i) for i in I])
             # # Calculate the ratio of points within the threshold
-            # overlap1 = (torch.min(distances,dim=1)[0] < cfg.downsample_voxel_size).float().sum().item() / len(np.asarray(objects[i]['pcd'].points))
-            # overlap2 = (torch.min(distances,dim=0)[0] < cfg.downsample_voxel_size).float().sum().item() / len(np.asarray(objects[j]['pcd'].points))
             overlap_matrix[i, j] = overlap1
             overlap_matrix[j, i] = overlap2
     return overlap_matrix
 
-# def compute_overlap_matrix_2set(cfg, objects_map: MapObjectList, objects_new: DetectionList) -> np.ndarray:
 #     '''
 #     compute pairwise overlapping between two set of objects in terms of point nearest neighbor. 
 #     objects_map is the existing objects in the map, objects_new is the new objects to be added to the map
@@ -634,53 +570,26 @@ def compute_overlap_matrix(cfg, objects: MapObjectList):
 #     Then we want to construct a matrix of size m x n, where the (i, j) entry is the ratio of points 
 #     in point cloud i that are within a distance threshold of any point in point cloud j.
 #     '''
-#     m = len(objects_map)
-#     n = len(objects_new)
-#     overlap_matrix = np.zeros((m, n))
     
 #     # Convert the point clouds into numpy arrays and then into FAISS indices for efficient search
-#     points_map = [np.asarray(obj['pcd'].points, dtype=np.float32) for obj in objects_map] # m arrays
-#     indices = [faiss.IndexFlatL2(arr.shape[1]) for arr in points_map] # m indices
     
 #     # Add the points from the numpy arrays to the corresponding FAISS indices
-#     for index, arr in zip(indices, points_map):
-#         index.add(arr)
         
-#     points_new = [np.asarray(obj['pcd'].points, dtype=np.float32) for obj in objects_new] # n arrays
         
-#     bbox_map = objects_map.get_stacked_values_torch('bbox')
-#     bbox_new = objects_new.get_stacked_values_torch('bbox')
 #     try:
-#         iou = compute_3d_iou_accuracte_batch(bbox_map, bbox_new) # (m, n)
 #     except ValueError:
-#         print("Met `Plane vertices are not coplanar` error, use axis aligned bounding box instead")
-#         bbox_map = []
-#         bbox_new = []
-#         for pcd in objects_map.get_values('pcd'):
 #             bbox_map.append(np.asarray(
 #                 pcd.get_axis_aligned_bounding_box().get_box_points()))
-#         for pcd in objects_new.get_values('pcd'):
 #             bbox_new.append(np.asarray(
 #                 pcd.get_axis_aligned_bounding_box().get_box_points()))
-#         bbox_map = torch.from_numpy(np.stack(bbox_map))
-#         bbox_new = torch.from_numpy(np.stack(bbox_new))
         
-#         iou = compute_iou_batch(bbox_map, bbox_new) # (m, n)
             
 
 #     # Compute the pairwise overlaps
-#     for i in range(m):
-#         for j in range(n):
-#             if iou[i,j] < 1e-6:
-#                 continue
             
-#             D, I = indices[i].search(points_new[j], 1) # search new object j in map object i
-#             overlap = (D < cfg.downsample_voxel_size ** 2).sum() # D is the squared distance
 
 #             # Calculate the ratio of points within the threshold
-#             overlap_matrix[i, j] = overlap / len(points_new[j])
 
-#     return overlap_matrix
 def compute_overlap_matrix_2set(cfg, objects_map: MapObjectList, objects_new: DetectionList) -> np.ndarray:
     '''
     compute pairwise overlapping between two set of objects in terms of point nearest neighbor. 
@@ -694,8 +603,6 @@ def compute_overlap_matrix_2set(cfg, objects_map: MapObjectList, objects_new: De
     overlap_matrix1 = torch.zeros((m, n))
     overlap_matrix2 = torch.zeros((m,n))
     # Convert the point clouds into numpy arrays and then into FAISS indices for efficient search
-    # points_map = [torch.tensor(np.asarray(obj['pcd'].points, dtype=np.float32),device=cfg.device) for obj in objects_map] # m arrays
-    # points_new = [torch.tensor(np.asarray(obj['pcd'].points, dtype=np.float32),device=cfg.device) for obj in objects_new] # n arrays
         
     bbox_map = objects_map.get_stacked_values_torch('bbox')
     bbox_new = objects_new.get_stacked_values_torch('bbox')
@@ -824,13 +731,9 @@ def filter_gobs(
             bbox_area = (x2 - x1) * (y2 - y1)
             image_area = image.shape[0] * image.shape[1]
             if bbox_area > cfg.max_bbox_area_ratio * image_area:
-                # print(f"Skipping {class_name} with area {bbox_area} > {cfg.max_bbox_area_ratio} * {image_area}")
                 continue
             
         # # Skip masks with low confidence
-        # if gobs['confidence'] is not None:
-        #     if gobs['confidence'][mask_idx] < cfg.mask_conf_threshold:
-        #         continue
         
         idx_to_keep.append(mask_idx)
     for k in gobs.keys():
@@ -907,7 +810,7 @@ def gobs_to_detection_list_Replica(
     
     n_masks = len(gobs['xyxy'])
     for mask_idx in range(n_masks):
-        local_class_id = gobs['class_id'][mask_idx]
+        gobs['class_id'][mask_idx]
         mask = gobs['mask'][mask_idx]
         class_name = gobs['classes'][mask_idx]
         global_class_id = -1 if class_names is None else class_names.index(class_name)
@@ -931,7 +834,6 @@ def gobs_to_detection_list_Replica(
             global_object_pcd = camera_object_pcd
         
         # get largest cluster, filter out noise 
-        # global_object_pcd = process_pcd(global_object_pcd, cfg)
         voxel_index = mapPcdToVoxel(np.array(global_object_pcd.points),voxel_size=voxel_size)
         pcd_bbox = get_bounding_box(cfg, global_object_pcd)
         pcd_bbox.color = [0,1,0]
@@ -1001,8 +903,6 @@ def gobs_to_detection_list(
     xyxy = gobs['xyxy']
     mask = gobs['mask']
     gobs['mask'] = mask_subtract_contained(xyxy, mask)
-    # import pdb
-    # pdb.set_trace()
     n_masks = len(gobs['xyxy'])
     for mask_idx in range(n_masks):
         mask = gobs['mask'][mask_idx]
@@ -1018,7 +918,6 @@ def gobs_to_detection_list(
         #     mask,
         #     cam_K,
         #     image,
-        #     obj_color = None
         # )
         camera_object_pcd = create_object_pcd_from_pcd(
         pcd_array,
@@ -1036,14 +935,8 @@ def gobs_to_detection_list(
             global_object_pcd = camera_object_pcd
         
         # get largest cluster, filter out noise 
-        # global_object_pcd = process_pcd(global_object_pcd, cfg)
         # dbscan
         # if class_name not in BG_CLASSES
-        # print(os.path.join(os.path.dirname(color_path),"sem_pcd",str(idx)+"_"+class_name+".ply"))
-        # o3d.io.write_point_cloud(os.path.join(os.path.dirname(os.path.dirname(color_path)) ,"sem_pcd",str(idx)+"_"+class_name+".ply"),global_object_pcd)
-        # if idx == 39 :
-        #     print(class_name)
-        #     o3d.visualization.draw_geometries([global_object_pcd])
         global_object_pcd = pcd_denoise_dbscan1(global_object_pcd,cfg) 
         voxel_index = mapPcdToVoxel(np.array(global_object_pcd.points),voxel_size=voxel_size,shape=shape,minbound=min_bound)
         pcd_bbox = get_bounding_box(cfg, global_object_pcd)
@@ -1087,7 +980,6 @@ def gobs_to_detection_list(
             'text_ft': to_tensor(gobs['text_feats'][mask_idx]),
         }
         if bool(set(class_name.split(',')) & set(BG_CLASSES)) or (class_name in BG_CLASSES):
-            # del detected_object['pcd']
             if class_name not in BG_CLASSES:
                 detected_object['class_name'] = list(set(class_name.split(',')) & set(BG_CLASSES))
             bg_detection_list.append(detected_object)
@@ -1096,33 +988,6 @@ def gobs_to_detection_list(
     
     return fg_detection_list, bg_detection_list
 
-def transform_detection_list(
-    detection_list: DetectionList,
-    transform: torch.Tensor,
-    deepcopy = False,
-):
-    '''
-    Transform the detection list by the given transform
-    
-    Args:
-        detection_list: DetectionList
-        transform: 4x4 torch.Tensor
-        
-    Returns:
-        transformed_detection_list: DetectionList
-    '''
-    transform = to_numpy(transform)
-    
-    if deepcopy:
-        detection_list = copy.deepcopy(detection_list)
-    
-    for i in range(len(detection_list)):
-        detection_list[i]['pcd'] = detection_list[i]['pcd'].transform(transform)
-        detection_list[i]['bbox'] = detection_list[i]['bbox'].rotate(transform[:3, :3], center=(0, 0, 0))
-        detection_list[i]['bbox'] = detection_list[i]['bbox'].translate(transform[:3, 3])
-        # detection_list[i]['bbox'] = detection_list[i]['pcd'].get_oriented_bounding_box(robust=True)
-    
-    return detection_list
 def camera_param_to_camera_matrix(camera_param):
     f = camera_param.f
     cx = camera_param.xc

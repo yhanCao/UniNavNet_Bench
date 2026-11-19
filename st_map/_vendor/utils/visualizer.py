@@ -11,11 +11,9 @@ import matplotlib.figure as mplfigure
 import pycocotools.mask as mask_util
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-from PIL import Image
 
 from detectron2.data import MetadataCatalog
-from detectron2.structures import BitMasks, Boxes, BoxMode, Keypoints, PolygonMasks, RotatedBoxes
-from detectron2.utils.file_io import PathManager
+from detectron2.structures import BitMasks, Boxes, Keypoints, PolygonMasks, RotatedBoxes
 
 from detectron2.utils.colormap import random_color
 
@@ -284,7 +282,6 @@ class VisImage:
             (self.height * self.scale + 1e-2) / self.dpi,
         )
         self.canvas = FigureCanvasAgg(fig)
-        # self.canvas = mpl.backends.backend_cairo.FigureCanvasCairo(fig)
         ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
         ax.axis("off")
         self.fig = fig
@@ -306,26 +303,6 @@ class VisImage:
                 the visualized image will be saved.
         """
         self.fig.savefig(filepath)
-
-    def get_image(self):
-        """
-        Returns:
-            ndarray:
-                the visualized image of shape (H, W, 3) (RGB) in uint8 type.
-                The shape is scaled w.r.t the input image using the given `scale` argument.
-        """
-        canvas = self.canvas
-        s, (width, height) = canvas.print_to_buffer()
-        # buf = io.BytesIO()  # works for cairo backend
-        # canvas.print_rgba(buf)
-        # width, height = self.width, self.height
-        # s = buf.getvalue()
-
-        buffer = np.frombuffer(s, dtype="uint8")
-
-        img_rgba = buffer.reshape(height, width, 4)
-        rgb, alpha = np.split(img_rgba, [3], axis=2)
-        return rgb.astype("uint8")
 
 
 class Visualizer:
@@ -381,104 +358,6 @@ class Visualizer:
         self._instance_mode = instance_mode
         self.keypoint_threshold = _KEYPOINT_THRESHOLD
 
-    def draw_instance_predictions(self, predictions, threshold=0.1):
-        """
-        Draw instance-level prediction results on an image.
-
-        Args:
-            predictions (Instances): the output of an instance detection/segmentation
-                model. Following fields will be used to draw:
-                "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
-
-        Returns:
-            output (VisImage): image object with visualizations.
-        """
-        boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
-        scores = predictions.scores if predictions.has("scores") else None
-        classes = predictions.pred_classes.tolist() if predictions.has("pred_classes") else None
-        labels = _create_text_labels(classes, scores, self.metadata.get("thing_classes", None))
-        keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
-
-        keep = (scores > threshold).cpu()
-        boxes = boxes[keep]
-        scores = scores[keep]
-        classes = np.array(classes)
-        classes = classes[np.array(keep)]
-        labels = np.array(labels)
-        labels = labels[np.array(keep)]
-
-        if predictions.has("pred_masks"):
-            masks = np.asarray(predictions.pred_masks)
-            masks = masks[np.array(keep)]
-            masks = [GenericMask(x, self.output.height, self.output.width) for x in masks]
-        else:
-            masks = None
-
-        if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
-        # if self.metadata.get("thing_colors"):
-            colors = [
-                self._jitter([x / 255 for x in self.metadata.thing_colors[c]]) for c in classes
-            ]
-            alpha = 0.4
-        else:
-            colors = None
-            alpha = 0.4
-
-        if self._instance_mode == ColorMode.IMAGE_BW:
-            self.output.reset_image(
-                self._create_grayscale_image(
-                    (predictions.pred_masks.any(dim=0) > 0).numpy()
-                    if predictions.has("pred_masks")
-                    else None
-                )
-            )
-            alpha = 0.3
-        
-        self.overlay_instances(
-            masks=masks,
-            boxes=boxes,
-            labels=labels,
-            keypoints=keypoints,
-            assigned_colors=colors,
-            alpha=alpha,
-        )
-        return self.output
-
-    def draw_sem_seg(self, sem_seg, area_threshold=None, alpha=0.7):
-        """
-        Draw semantic segmentation predictions/labels.
-
-        Args:
-            sem_seg (Tensor or ndarray): the segmentation of shape (H, W).
-                Each value is the integer label of the pixel.
-            area_threshold (int): segments with less than `area_threshold` are not drawn.
-            alpha (float): the larger it is, the more opaque the segmentations are.
-
-        Returns:
-            output (VisImage): image object with visualizations.
-        """
-        if isinstance(sem_seg, torch.Tensor):
-            sem_seg = sem_seg.numpy()
-        labels, areas = np.unique(sem_seg, return_counts=True)
-        sorted_idxs = np.argsort(-areas).tolist()
-        labels = labels[sorted_idxs]
-        for label in filter(lambda l: l < len(self.metadata.stuff_classes), labels):
-            try:
-                mask_color = [x / 255 for x in self.metadata.stuff_colors[label]]
-            except (AttributeError, IndexError):
-                mask_color = None
-
-            binary_mask = (sem_seg == label).astype(np.uint8)
-            text = self.metadata.stuff_classes[label]
-            self.draw_binary_mask(
-                binary_mask,
-                color=mask_color,
-                edge_color=_OFF_WHITE,
-                text=text,
-                alpha=alpha,
-                area_threshold=area_threshold,
-            )
-        return self.output
 
     def draw_panoptic_seg(self, panoptic_seg, segments_info, area_threshold=None, alpha=0.7):
         """
@@ -550,74 +429,6 @@ class Visualizer:
 
     draw_panoptic_seg_predictions = draw_panoptic_seg  # backward compatibility
 
-    def draw_dataset_dict(self, dic):
-        """
-        Draw annotations/segmentaions in Detectron2 Dataset format.
-
-        Args:
-            dic (dict): annotation/segmentation data of one image, in Detectron2 Dataset format.
-
-        Returns:
-            output (VisImage): image object with visualizations.
-        """
-        annos = dic.get("annotations", None)
-        if annos:
-            if "segmentation" in annos[0]:
-                masks = [x["segmentation"] for x in annos]
-            else:
-                masks = None
-            if "keypoints" in annos[0]:
-                keypts = [x["keypoints"] for x in annos]
-                keypts = np.array(keypts).reshape(len(annos), -1, 3)
-            else:
-                keypts = None
-
-            boxes = [
-                BoxMode.convert(x["bbox"], x["bbox_mode"], BoxMode.XYXY_ABS)
-                if len(x["bbox"]) == 4
-                else x["bbox"]
-                for x in annos
-            ]
-
-            colors = None
-            category_ids = [x["category_id"] for x in annos]
-            if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
-                colors = [
-                    self._jitter([x / 255 for x in self.metadata.thing_colors[c]])
-                    for c in category_ids
-                ]
-            names = self.metadata.get("thing_classes", None)
-            labels = _create_text_labels(
-                category_ids,
-                scores=None,
-                class_names=names,
-                is_crowd=[x.get("iscrowd", 0) for x in annos],
-            )
-            self.overlay_instances(
-                labels=labels, boxes=boxes, masks=masks, keypoints=keypts, assigned_colors=colors
-            )
-
-        sem_seg = dic.get("sem_seg", None)
-        if sem_seg is None and "sem_seg_file_name" in dic:
-            with PathManager.open(dic["sem_seg_file_name"], "rb") as f:
-                sem_seg = Image.open(f)
-                sem_seg = np.asarray(sem_seg, dtype="uint8")
-        if sem_seg is not None:
-            self.draw_sem_seg(sem_seg, area_threshold=0, alpha=0.4)
-
-        pan_seg = dic.get("pan_seg", None)
-        if pan_seg is None and "pan_seg_file_name" in dic:
-            with PathManager.open(dic["pan_seg_file_name"], "rb") as f:
-                pan_seg = Image.open(f)
-                pan_seg = np.asarray(pan_seg)
-                from panopticapi.utils import rgb2id
-
-                pan_seg = rgb2id(pan_seg)
-        if pan_seg is not None:
-            segments_info = dic["segments_info"]
-            pan_seg = torch.tensor(pan_seg)
-            self.draw_panoptic_seg(pan_seg, segments_info, area_threshold=0, alpha=0.7)
-        return self.output
 
     def overlay_instances(
         self,
@@ -740,7 +551,6 @@ class Visualizer:
                         text_pos = (x0, y1)
 
                 height_ratio = (y1 - y0) / np.sqrt(self.output.height * self.output.width)
-                # lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
                 font_size = (
                     np.clip((height_ratio - 0.02) / 0.08 + 1, 1.2, 2)
                     * 0.5
@@ -1098,33 +908,6 @@ class Visualizer:
             self._draw_text_in_mask(binary_mask, text, lighter_color)
         return self.output
 
-    def draw_soft_mask(self, soft_mask, color=None, *, text=None, alpha=0.5):
-        """
-        Args:
-            soft_mask (ndarray): float array of shape (H, W), each value in [0, 1].
-            color: color of the mask. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted. If None, will pick a random color.
-            text (str): if None, will be drawn on the object
-            alpha (float): blending efficient. Smaller values lead to more transparent masks.
-
-        Returns:
-            output (VisImage): image object with mask drawn.
-        """
-        if color is None:
-            color = random_color(rgb=True, maximum=1)
-        color = mplc.to_rgb(color)
-
-        shape2d = (soft_mask.shape[0], soft_mask.shape[1])
-        rgba = np.zeros(shape2d + (4,), dtype="float32")
-        rgba[:, :, :3] = color
-        rgba[:, :, 3] = soft_mask * alpha
-        self.output.ax.imshow(rgba, extent=(0, self.output.width, self.output.height, 0))
-
-        if text is not None:
-            lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-            binary_mask = (soft_mask > 0.5).astype("uint8")
-            self._draw_text_in_mask(binary_mask, text, lighter_color)
-        return self.output
 
     def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
         """
@@ -1175,7 +958,6 @@ class Visualizer:
                 color after being jittered. The values in the list are in the [0.0, 1.0] range.
         """
         color = mplc.to_rgb(color)
-        # np.random.seed(0)
         vec = np.random.rand(3)
         # better to do it in another color space
         vec = vec / np.linalg.norm(vec) * 0.5
@@ -1264,7 +1046,6 @@ class Visualizer:
         for cid in range(1, _num_cc):
             if cid == largest_component_id or stats[cid, -1] > _LARGE_MASK_AREA_THRESH:
                 # median is more stable than centroid
-                # center = centroids[largest_component_id]
                 center = np.median((cc_labels == cid).nonzero(), axis=1)[::-1]
                 self.draw_text(text, center, color=color)
 
@@ -1274,10 +1055,3 @@ class Visualizer:
         keypoints = np.asarray(keypoints)
         return keypoints
 
-    def get_output(self):
-        """
-        Returns:
-            output (VisImage): the image output containing the visualizations added
-            to the image.
-        """
-        return self.output
