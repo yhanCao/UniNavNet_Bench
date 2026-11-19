@@ -8,14 +8,16 @@ llm:
   base_url: http://127.0.0.1:8000/v1
   model: default  # replace with your deployed text model
   api_key: EMPTY  # prefer ST_MAP_LLM_API_KEY for authenticated servers
-  enable_thinking: false  # thinking multiplies output tokens
-  max_tokens: 64          # the reply is {"reason": <= 15 words, "result": node}
+  # enable_thinking: false  # DashScope / Qwen only (sent only when set): thinking multiplies output tokens
+  max_tokens: 64            # the reply is {"reason": <= 15 words, "result": node}; null for no cap
+  extra_body: {}            # provider-specific fields, e.g. {reasoning_effort: low} for OpenAI reasoning models
 vlm:
   base_url: http://127.0.0.1:8000/v1
   model: default  # replace with your deployed vision-language model
   api_key: EMPTY
-  enable_thinking: false
-  max_tokens: 8           # True / False
+  # enable_thinking: false
+  max_tokens: 8             # True / False; a reasoning model needs room for its reasoning tokens (or null)
+  extra_body: {}
   image_max_side: 320     # views are cropped to the object and scaled down (~100 tokens each)
   crop_margin: 0.3
 memory:

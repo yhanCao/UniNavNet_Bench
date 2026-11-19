@@ -339,3 +339,38 @@ def test_only_relocations_can_trap_the_agent():
     assert not challenge.relocates(events, 0, 1)
     assert challenge.relocates(events, 0, 2)
 
+
+
+def rejecting_client(rejected):
+    """A chat client that rejects requests containing any of the given parameters, as OpenAI does."""
+    import openai
+    calls = []
+
+    def create(**kwargs):
+        calls.append(dict(kwargs))
+        bad = [p for p in rejected if p in kwargs]
+        if bad:
+            error = openai.BadRequestError.__new__(openai.BadRequestError)  # no HTTP response needed
+            Exception.__init__(error, f"Unsupported parameter: '{bad[0]}' is not supported with this model.")
+            raise error
+        return 'ok'
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))), calls
+
+
+@pytest.mark.parametrize('rejected', [(), ('max_tokens',), ('temperature',), ('max_tokens', 'temperature')])
+def test_chat_requests_adapt_to_the_provider(rejected):
+    from uninavbench.chat import create_chat
+    client, calls = rejecting_client(rejected)
+    assert create_chat(client, model='m', messages=[], max_tokens=8, temperature=0.0) == 'ok'
+    final = calls[-1]
+    assert ('max_tokens' in final) != ('max_completion_tokens' in final) and 8 in (final.get('max_tokens'), final.get('max_completion_tokens'))
+    assert ('temperature' in final) == ('temperature' not in rejected)
+
+
+def test_other_bad_requests_are_not_retried():
+    import openai
+    from uninavbench.chat import create_chat
+    client, calls = rejecting_client(('messages',))
+    with pytest.raises(openai.BadRequestError):
+        create_chat(client, model='m', messages=[])
+    assert len(calls) == 1

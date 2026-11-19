@@ -374,3 +374,18 @@ def test_projection_ignores_points_behind_the_camera():
         with patch('st_map.memory.X_w_to_X_v', lambda R, t, p: p.T):
             m.updateObjectState(1, '/nonexistent', None, None, np.full((4, 4), 5.))
     assert 1 in m.objects[0]['state_dict']
+
+
+def test_provider_specific_fields_are_only_sent_when_configured():
+    from st_map._vendor.vlm.client import ChatClient
+    sent = []
+    def create(**kwargs):
+        sent.append(kwargs)
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(message=SimpleNamespace(content='3'))])
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    for options, body in (({}, None), ({'enable_thinking': False}, {'enable_thinking': False}),
+                          ({'extra_body': {'reasoning_effort': 'low'}}, {'reasoning_effort': 'low'})):
+        client = ChatClient('https://api.example/v1', 'k', 'm', max_tokens=8, **options)
+        client.client = fake
+        assert client.chat([{'role': 'user', 'content': 'q'}], 'llm') == '3'
+        assert sent[-1].get('extra_body') == body and sent[-1]['max_tokens'] == 8
