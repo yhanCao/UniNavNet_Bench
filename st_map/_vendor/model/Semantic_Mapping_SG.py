@@ -273,6 +273,9 @@ class Semantic_Mapping_SG(TemporalMemoryMixin, nn.Module):
         self.archive_limit = memory_cfg.get('archive_limit',32)
         self.debug_artifacts = runtime_cfg.get('debug_artifacts',False)
         self.saved_frames = set()
+        # "visible" needs 100 projected points at the upstream 5 mm point spacing: keep the same area at the
+        # configured spacing (100 points at 5 mm cover what ~6 points cover at 2 cm)
+        self.min_visible_points = max(1, round(100 * (0.005 / self.cfg_detection.downsample_voxel_size) ** 2))
         self.caption_vlm = None
         if self.history_caption:
             vlm_cfg = memory_cfg.get('caption_vlm') or {}

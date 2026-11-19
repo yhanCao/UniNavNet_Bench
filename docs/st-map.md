@@ -101,7 +101,7 @@ are written only with `debug_artifacts: true`.
 ### Active-EQA answers
 
 For a question (an instruction ending in `?`), the agent answers once, when it stops or at step
-`max_task_steps` (500, the benchmark's limit): the VLM receives the question, the current frame and up to
+`max_task_steps` (200, the benchmark's limit): the VLM receives the question, the current frame and up to
 two close-ups of the verified target (or of the object most similar to the question), and replies in at
 most 10 words.
 

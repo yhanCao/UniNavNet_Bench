@@ -603,10 +603,9 @@ class OpenSeeD(nn.Module):
         mask_pred = mask_pred[topk_indices]
         # if this is panoptic segmentation, we only keep the "thing" classes
         if self.panoptic_on:
-            keep = torch.zeros_like(scores_per_image).bool()
-            for i, lab in enumerate(labels_per_image):
-                # print(i, len(keep), lab)
-                keep[i] = lab in self.metadata.thing_dataset_id_to_contiguous_id.values()
+            # one vectorized test instead of a GPU sync per (candidate, class) comparison
+            thing_ids = torch.as_tensor(list(self.metadata.thing_dataset_id_to_contiguous_id.values()), device=labels_per_image.device)
+            keep = torch.isin(labels_per_image, thing_ids)
             scores_per_image = scores_per_image[keep]
             labels_per_image = labels_per_image[keep]
             mask_pred = mask_pred[keep]

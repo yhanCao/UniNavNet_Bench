@@ -6,6 +6,14 @@ class EmbeddingText():
         self.model_name = model_name
         self.model = SentenceTransformer(model_name, device="cuda")
         self.target_feat = None
+        self._names = {}  # class name -> embedding; bounded by the detector's vocabulary
+
+    def _embed(self, texts):
+        missing = [t for t in dict.fromkeys(texts) if t not in self._names]
+        if missing:
+            for t, e in zip(missing, self.model.encode(missing, convert_to_tensor=True, show_progress_bar=False)):
+                self._names[t] = e
+        return torch.stack([self._names[t] for t in texts])
 
     @property
     def embedding_model(self):
@@ -41,7 +49,7 @@ class EmbeddingText():
         similarity = F.cosine_similarity(embedding1, embedding2, dim=0)
         return similarity
     def query_multiple(self,texts):
-        embedding1 = self.model.encode(texts, convert_to_tensor=True, show_progress_bar=False)
+        embedding1 = self._embed(list(texts))
         similarity = F.cosine_similarity(embedding1, self.target_feat , dim=1)
         value= torch.max(similarity)
         all_max_indices = torch.where(similarity == value)[0]

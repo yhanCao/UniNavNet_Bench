@@ -216,7 +216,7 @@ class TemporalMemoryMixin:
         missing = []
         for key,value in visible_length.items() :
                 if idx not in self.objects[key]['state_dict'].keys():
-                    if value > 100:
+                    if value > getattr(self,'min_visible_points',100):
                         # state 2 needs both geometric conflict and appearance mismatch
                         if ratios[key] > 0.2 and self.appearanceMismatch(self.objects[key],conflict_uv[key],rgb):
                             # print("object:",self.objects[key]['class_name'],"idx:",idx,ratios[key] > 0.2)
