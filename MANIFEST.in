@@ -1,7 +1,6 @@
 recursive-include examples *.py
 recursive-include tests *.py
 recursive-include scripts *.py
-recursive-include docs *.md
 recursive-include st_map *.yaml *.txt *.json *.cpp *.h *.cu *.cuh *.sh
 include st_map/NOTICE
 global-exclude __pycache__ *.py[cod]
