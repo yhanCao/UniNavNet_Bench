@@ -174,6 +174,7 @@ Notes:
 - Speed: about 0.5 s per step on an RTX 4090 with 16.5 GB of GPU memory (one instance per 24 GB GPU).
 - Tokens: the planner sees one line per candidate node and replies with a short JSON, and goal verification sends crops of the candidate scaled to 320 px. Token counts per call kind are written to `ST-Map/usage.json`.
 - Memory and disk use stay bounded over an episode (a few views per object, a capped history archive, unused frames deleted). `debug_artifacts: true` additionally saves per-step data and plots.
+- Targets: objects are matched against the target's name rather than the whole instruction ("Find the blue, plastic CellPhone" -> "cell phone"; for demand-driven instructions the LLM picks one of the benchmark's object types), and the OpenSeeD vocabulary includes the benchmark's object types. The agent walks to the reachable cell closest to the verified goal before stopping.
 - Active-EQA: the agent searches for the object a question mentions and answers once, when it stops or on its last step, from the current frame and close-ups of the target. This answer step is a minimal addition, not part of ST-CogNav.
 
 ## 4. Adding your own agent

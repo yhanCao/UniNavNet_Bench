@@ -181,7 +181,8 @@ def test_agent_lifecycle_persists_memory_across_repeated_tasks(tmp_path):
     assert agent.act(obs) == ('MoveAhead', None)
     agent.start_task('Find Cup', [])
     assert agent.memory.history_archive == ['remembered']
-    assert backend.calls == [('init', 'Find Cup'), ('reset', 'Find Cup')]
+    # the backend matches objects against the target's name, not the whole instruction
+    assert backend.calls == [('init', 'cup'), ('reset', 'cup')]
     assert agent.act(obs) == ('LookUp', None)
     assert agent.act(obs) == ('MoveAhead', None)
     agent.update_environment([{'x': 1, 'y': 0, 'z': 0}])
@@ -389,3 +390,14 @@ def test_provider_specific_fields_are_only_sent_when_configured():
         client.client = fake
         assert client.chat([{'role': 'user', 'content': 'q'}], 'llm') == '3'
         assert sent[-1].get('extra_body') == body and sent[-1]['max_tokens'] == 8
+
+
+def test_target_phrase_is_the_first_object_word():
+    from st_map.agent import target_phrase
+    assert target_phrase('Find the blue, plastic CellPhone') == 'cell phone'
+    assert target_phrase('Find the Faucet which is on the Sink') == 'faucet'
+    assert target_phrase('Find the TVStand showing in the image.') == 'tv stand'
+    assert target_phrase('How many Books are there in the Bedroom?') == 'books'
+    assert target_phrase('What did I do with the KeyChain during \'use keychain\' today?') == 'key chain'
+    assert target_phrase('I need a method of payment.') is None
+    assert target_phrase("I'm so hungry. Please give me something to eat.") is None

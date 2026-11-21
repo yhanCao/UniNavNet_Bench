@@ -470,3 +470,51 @@ sink
 Bathtub
 mirror-stuff
 Printer
+alarm clock
+arm chair
+box
+butter knife
+cart
+cloth
+clothes dryer
+counter top
+credit card
+desk lamp
+desktop
+dish sponge
+dog bed
+dresser
+floor lamp
+fridge
+garbage bag
+garbage can
+house plant
+key chain
+ladle
+laundry hamper
+mug
+newspaper
+ottoman
+painting
+pan
+paper towel roll
+pepper shaker
+plunger
+remote control
+room decor
+safe
+salt shaker
+shelving unit
+side table
+soap bar
+soap bottle
+sofa
+spatula
+spray bottle
+statue
+table top decor
+television
+tissue box
+tv stand
+vacuum cleaner
+wine bottle

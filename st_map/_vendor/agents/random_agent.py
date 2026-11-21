@@ -10,7 +10,7 @@ import networkx as nx
 from st_map._vendor.utils.local_planner import Local_Planner,Select_now_index
 import torch
 from st_map._vendor.utils.voronoi import projectCurrentAgentLoc
-from st_map._vendor.scenegraph.querypath import find_nearby_objects_2d, QueryByLLM, find_nearest_node, select_subgraph_nodes, format_nearby_objects
+from st_map._vendor.scenegraph.querypath import find_nearby_objects_2d, QueryByLLM, select_subgraph_nodes, format_nearby_objects
 from st_map._vendor.vlm.llm import LLMQwQ
 from st_map._vendor.utils.voronoi_ai2thor import * 
 import pickle as pkl
@@ -82,6 +82,18 @@ class SimpleRandomAgent(Agent):
             action = None
         self.repitch = 0
         return action
+    def goal_points(self,obj):
+        """(x, z) of the voxels of obj without stray voxels."""
+        points = extractVoxelCenterfromVoxelmap(obj['voxel_index'],self.size,self.min_bound,0.25)[:, :2]
+        center = np.median(points, axis=0)
+        spread = np.linalg.norm(points - center, axis=1)
+        return points[spread <= max(1.0, 2 * np.median(spread))]
+    def approach_point(self,obj):
+        """Reachable (x, z) closest to the voxels of obj, ignoring stray voxels (depth noise or a wrong merge can
+        put single voxels metres away, next to the agent)."""
+        points = self.goal_points(obj)
+        d = np.linalg.norm(self.reachable_2D_pos[:, None, :] - points[None, :, :], axis=2).min(axis=1)
+        return self.reachable_2D_pos[int(np.argmin(d))]
     def object_views(self,obj,frames):
         """(image path, bounding box) of an object's detections in the given frames."""
         boxes = dict(zip(obj['image_idx'],obj['xyxy']))
@@ -178,7 +190,9 @@ class SimpleRandomAgent(Agent):
             if self.found_goal is not None  and self.graph is not None:
                 #### change the graph or set the coarse and fine graph
                 self.graph,history_explored = generate_voronoi(self.explored_node,self.unexplored_node,self.reachable_2D_pos,self.sem_map_module.pcd,self.global_position_history,self.save_path+"plt1/",observations['step'])
-                landmark_goal,landmark_location = find_nearest_node(self.found_goal,self.explored_node,self.reachable_2D_pos[self.explored_node],self.size,self.min_bound,0.25)
+                # approach the reachable cell closest to any voxel of the goal (the nearest explored node to the
+                # goal's center can be more than 1 m from the object, too far to see it when stopping)
+                landmark_location = self.approach_point(self.found_goal)
                 agent_location = np.array([observations['event'].metadata['agent']['position']['x'],observations['event'].metadata['agent']['position']['z']])
                 if np.linalg.norm(agent_location-landmark_location) <= 0.5 :
                     ## judge the angle and view
@@ -193,8 +207,15 @@ class SimpleRandomAgent(Agent):
                     print("current_rotation:",current_rotation)
                     self.actions = self.local_planner.act(start,goal,current_rotation,self.save_path if self.debug else None,observations['step'],self.explored_node,self.unexplored_node)
                     if len(self.actions) == 0 :
-                        obj_points = extractVoxelCenterfromVoxelmap(self.found_goal['voxel_index'],self.size,self.min_bound,0.25)
-                        self.actions,self.repitch = self.local_planner.rotation_to_goal(obj_points,int(event.metadata['agent']['rotation']['y']),event.metadata['agent']['position'],event.metadata['cameraPosition']['y'],self.fov,-int(event.metadata['agent']['cameraHorizon']))
+                        if np.linalg.norm(agent_location-landmark_location) <= 0.75:
+                            obj_points = extractVoxelCenterfromVoxelmap(self.found_goal['voxel_index'],self.size,self.min_bound,0.25)
+                            self.actions,self.repitch = self.local_planner.rotation_to_goal(obj_points,int(event.metadata['agent']['rotation']['y']),event.metadata['agent']['position'],event.metadata['cameraPosition']['y'],self.fov,-int(event.metadata['agent']['cameraHorizon']))
+                        else:
+                            # no path to the goal: drop it and keep searching instead of stopping far away
+                            print("goal unreachable, searching again:",goal)
+                            self.found_goal['target_judge'] = False
+                            self.found_goal = None
+                            self.actions = ['RotateRight']
                     print(f"start:{start}; goal:{goal}; current_rotation:{current_rotation}; actions:{self.actions}.")
                     self.replan = False
             else:

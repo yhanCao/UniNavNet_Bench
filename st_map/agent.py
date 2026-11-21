@@ -1,9 +1,30 @@
 """UniNavBench lifecycle adapter for the pinned ST-CogNav implementation."""
 import json
+import re
 from pathlib import Path
 from collections import deque
 from uninavbench.agent import Agent
 from .config import load_config, validate_runtime
+
+
+# capitalized words of an instruction that are not the object being asked about
+NOT_OBJECTS = {"Find", "What", "Where", "How", "Is", "Are", "Has", "Have", "Did", "Does", "Do", "I", "Please", "The", "My",
+               "Kitchen", "LivingRoom", "Bedroom", "Bathroom", "Room"}
+
+
+def words(name):
+    """CellPhone -> cell phone, TVStand -> tv stand."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", name).lower()
+
+
+def target_phrase(instruction):
+    """The object an instruction or question is about, from its first capitalized object word
+    ("Find the blue, plastic CellPhone" -> "cell phone", "Find the Faucet which is on the Sink" -> "faucet",
+    "How many Books are there in the Bedroom?" -> "books"). None when it names no object (demand-driven)."""
+    for word in re.findall(r"\b[A-Z][A-Za-z]+\b", re.sub(r"'[^']*'", "", instruction)):
+        if word not in NOT_OBJECTS:
+            return words(word)
+    return None
 
 
 class STMapAgent(Agent):
@@ -50,11 +71,14 @@ class STMapAgent(Agent):
         # Upstream uses string concatenation for some artifact directories.
         path = str(self.output_dir) + '/'
         self._instruction, self._task_steps = instruction, 0
+        # objects are matched against the target's name: the whole sentence (attributes, relations, rooms)
+        # dilutes the similarity; verification and node selection still see the full instruction
+        target = target_phrase(instruction) or self.backend.llm.target_object(instruction) or instruction
         if not self._task_started:
-            self.backend.init(reachable_positions, path, instruction)
+            self.backend.init(reachable_positions, path, target)
             self._task_started = True
         else:
-            corrections = self.backend.reset(reachable_positions, path, instruction)
+            corrections = self.backend.reset(reachable_positions, path, target)
             self._pending_actions = deque(corrections or [])
 
     def reset(self):
