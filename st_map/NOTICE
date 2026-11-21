@@ -18,3 +18,5 @@ notice does not relicense third-party code or model weights.
 Code that never runs in UniNavBench was removed after packaging: unused modules (alternative OpenSeeD
 backbones and decoders, drawing and visualization helpers), functions and imports that no executed
 or referenced code reaches, and commented-out code. Comments were translated to English.
+The OpenSeeD detection vocabulary (configs/panoptic_categories_nomerge.txt) is extended with the ProcTHOR
+object types of the benchmark that it lacked (e.g. tv stand, credit card, salt shaker).

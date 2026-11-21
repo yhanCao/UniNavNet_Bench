@@ -155,12 +155,3 @@ def find_nearest_landmark(object,grid_points,shape,minbound,size):
     min_distances = np.min(distances, axis=1)
     nearest_index = np.argmin(min_distances)
     return keys[nearest_index],values[nearest_index]
-def find_nearest_node(object,node,points,shape,minbound,size):
-    obj_points = extractVoxelCenterfromVoxelmap(object['voxel_index'],shape,minbound,size)
-    object_points_2d = np.mean(obj_points[:, :2],axis=0).reshape(1,-1)  # (x, y)
-    keys = np.array(node)
-    values = np.array(points)
-    distances = np.linalg.norm(values[:, np.newaxis, :] - object_points_2d[np.newaxis, :, :], axis=2)
-    min_distances = np.min(distances, axis=1)
-    nearest_index = np.argmin(min_distances)
-    return keys[nearest_index],values[nearest_index]
